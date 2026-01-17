@@ -173,11 +173,17 @@ def decompile_to_c(ghidra_pseudo_c: str) -> str:
         print("[!] LLM4Decompile not available, returning original code")
         return ghidra_pseudo_c
     
-    # LLM4Decompile Refine model prompt format
-    # The model expects Ghidra pseudo-C and outputs refined C
-    prompt = f"# This is the Ghidra pseudo-C:\n{ghidra_pseudo_c}\n# What is the source code?\n"
-    
     try:
+        # Truncate very long inputs to prevent slow inference
+        max_input_chars = 8000  # ~2000 tokens
+        truncated_input = ghidra_pseudo_c
+        if len(ghidra_pseudo_c) > max_input_chars:
+            truncated_input = ghidra_pseudo_c[:max_input_chars] + "\n// ... (input truncated)"
+            print(f"[*] Input truncated from {len(ghidra_pseudo_c)} to {max_input_chars} chars")
+        
+        # LLM4Decompile Refine model prompt format
+        prompt = f"# This is the Ghidra pseudo-C:\n{truncated_input}\n# What is the source code?\n"
+        
         inputs = tokenizer(
             prompt, 
             return_tensors="pt",
@@ -185,11 +191,17 @@ def decompile_to_c(ghidra_pseudo_c: str) -> str:
             max_length=4096,
         ).to(model.device)
         
+        print(f"[*] Input tokens: {inputs.input_ids.shape[1]}")
+        
         with torch.no_grad():
             outputs = model.generate(
                 **inputs,
-                max_new_tokens=2048,
-                do_sample=False,  # Deterministic for consistency
+                max_new_tokens=1024,  # Reduced to prevent long loops
+                do_sample=True,  # Enable sampling to avoid repetition
+                temperature=0.8,  # Low temp for consistency but not greedy
+                top_p=0.95,  # Nucleus sampling
+                repetition_penalty=1.15,  # Penalize repeated tokens
+                no_repeat_ngram_size=4,  # Prevent 4-gram repetition
                 pad_token_id=tokenizer.eos_token_id,
                 eos_token_id=tokenizer.eos_token_id,
             )
@@ -200,6 +212,8 @@ def decompile_to_c(ghidra_pseudo_c: str) -> str:
             outputs[0][prompt_length:], 
             skip_special_tokens=True
         )
+        
+        print(f"[*] Output tokens: {len(outputs[0]) - prompt_length}")
         
         # Post-process to fix formatting (LLM sometimes outputs minified code)
         formatted = _format_c_code(result.strip())
@@ -212,11 +226,51 @@ def decompile_to_c(ghidra_pseudo_c: str) -> str:
         return ghidra_pseudo_c
 
 
+def _detect_and_truncate_repetition(code: str) -> str:
+    """
+    Detect repetition loops in LLM output and truncate them.
+    This catches cases where the model gets stuck repeating lines.
+    """
+    lines = code.split('\n')
+    if len(lines) < 10:
+        return code
+    
+    # Look for repeated line patterns
+    seen_lines = {}
+    truncate_at = None
+    repeat_count = 0
+    
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if not stripped or stripped in ('{', '}', ''):
+            continue
+        
+        if stripped in seen_lines:
+            seen_lines[stripped] += 1
+            if seen_lines[stripped] > 3:  # Same line appears more than 3 times
+                repeat_count += 1
+                if repeat_count > 5:  # Multiple repeated lines = loop detected
+                    truncate_at = i - 10  # Go back a bit before the loop started
+                    break
+        else:
+            seen_lines[stripped] = 1
+            repeat_count = 0  # Reset counter when we see new content
+    
+    if truncate_at and truncate_at > 10:
+        truncated = '\n'.join(lines[:truncate_at])
+        return truncated + '\n    // ... (output truncated due to repetition)\n}'
+    
+    return code
+
+
 def _format_c_code(code: str) -> str:
     """
     Post-process LLM output to ensure proper C formatting.
     LLM4Decompile sometimes outputs minified code - this fixes that.
     """
+    # First, detect and truncate any repetition loops
+    code = _detect_and_truncate_repetition(code)
+    
     if not code or '\n' in code and code.count('\n') > 5:
         # Already has formatting, don't mess with it
         return code
