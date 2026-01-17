@@ -12,6 +12,7 @@ Model: LLM4Binary/llm4decompile-1.3b-v2
 """
 
 import os
+import re
 from typing import Optional, Tuple
 
 # Check if disabled via environment variable
@@ -200,13 +201,76 @@ def decompile_to_c(ghidra_pseudo_c: str) -> str:
             skip_special_tokens=True
         )
         
-        return result.strip()
+        # Post-process to fix formatting (LLM sometimes outputs minified code)
+        formatted = _format_c_code(result.strip())
+        return formatted
         
     except Exception as e:
         print(f"[!] Error during LLM4Decompile inference: {e}")
         import traceback
         traceback.print_exc()
         return ghidra_pseudo_c
+
+
+def _format_c_code(code: str) -> str:
+    """
+    Post-process LLM output to ensure proper C formatting.
+    LLM4Decompile sometimes outputs minified code - this fixes that.
+    """
+    if not code or '\n' in code and code.count('\n') > 5:
+        # Already has formatting, don't mess with it
+        return code
+    
+    result = code
+    
+    # Add newlines after semicolons (but not in for loops)
+    # First protect for loops
+    for_loops = re.findall(r'for\s*\([^)]+\)', result)
+    for i, loop in enumerate(for_loops):
+        result = result.replace(loop, f'__FOR_LOOP_{i}__')
+    
+    # Add newline after semicolons
+    result = re.sub(r';(?!\s*\n)', ';\n', result)
+    
+    # Restore for loops
+    for i, loop in enumerate(for_loops):
+        result = result.replace(f'__FOR_LOOP_{i}__', loop)
+    
+    # Add newline after opening braces
+    result = re.sub(r'\{(?!\s*\n)', '{\n', result)
+    
+    # Add newline before closing braces
+    result = re.sub(r'(?<!\n)\s*\}', '\n}', result)
+    
+    # Add newline after closing braces (but not before else/else if)
+    result = re.sub(r'\}(?!\s*else)(?!\s*\n)(?!\s*$)', '}\n', result)
+    
+    # Fix multiple newlines
+    result = re.sub(r'\n{3,}', '\n\n', result)
+    
+    # Basic indentation - count braces
+    lines = result.split('\n')
+    formatted_lines = []
+    indent = 0
+    
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            formatted_lines.append('')
+            continue
+        
+        # Decrease indent before closing brace
+        if stripped.startswith('}'):
+            indent = max(0, indent - 1)
+        
+        # Add indentation
+        formatted_lines.append('    ' * indent + stripped)
+        
+        # Increase indent after opening brace
+        if stripped.endswith('{'):
+            indent += 1
+    
+    return '\n'.join(formatted_lines)
 
 
 def mock_decompile_to_c(pseudo_code: str) -> str:
@@ -230,4 +294,5 @@ def mock_decompile_to_c(pseudo_code: str) -> str:
     result = result.replace("== 0x0", "== NULL")
     result = result.replace("!= 0x0", "!= NULL")
     
-    return result
+    # Apply formatting
+    return _format_c_code(result)

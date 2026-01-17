@@ -48,10 +48,25 @@ LIBRARY_FUNCTIONS: Set[str] = {
     "__GSHandlerCheck", "__CxxFrameHandler3", "__CxxFrameHandler4",
     "_initterm", "_initterm_e", "__acrt_iob_func",
     "_cexit", "_c_exit", "_exit", "__p___argc", "__p___argv",
-    # Compiler-generated
+    # Compiler-generated / linker stubs
     "_start", "__libc_start_main", "__gmon_start__",
     "__cxa_atexit", "__cxa_finalize",
     "_fini", "_init",
+    # MinGW CRT (C Runtime) functions - NOT user code!
+    "WinMainCRTStartup", "mainCRTStartup", "wmainCRTStartup", "wWinMainCRTStartup",
+    "__tmainCRTStartup", "__wgetmainargs", "__getmainargs",
+    "__main", "__do_global_dtors", "__do_global_ctors",
+    "atexit", "__gcc_register_frame", "__gcc_deregister_frame",
+    "mark_section_writable", "restore_modified_sections",
+    "mingw_set_invalid_parameter_handler", "mingw_get_invalid_parameter_handler",
+    "_matherr", "mingw_matherr", "__mingw_raise_matherr",
+    "__mingw_GetSectionForAddress", "__mingw_GetSectionCount",
+    "_pei386_runtime_relocator", "__mingw_init_ehandler",
+    "_gnu_exception_handler", "__mingwInitEhandler",
+    # GCC exception handling
+    "_Unwind_Resume", "_Unwind_RaiseException", "_Unwind_GetIP",
+    "__gxx_personality_v0", "__cxa_begin_catch", "__cxa_end_catch",
+    "__cxa_throw", "__cxa_rethrow", "__cxa_allocate_exception",
 }
 
 # Only try to use PyGhidra if GHIDRA_INSTALL_DIR is set
@@ -103,14 +118,31 @@ def is_user_function(func, func_name: str) -> bool:
     if func_name.lower() in {f.lower() for f in LIBRARY_FUNCTIONS}:
         return False
     
-    # Skip MSVC runtime functions (start with __scrt_, __acrt_, __vcrt_, etc.)
+    # Skip runtime functions by prefix patterns
     runtime_prefixes = [
+        # MSVC runtime
         "__scrt_", "__acrt_", "__vcrt_", "__std_", "__crt_",
         "_CRT_", "_RTC_", "__security_", "__report_", "__raise_",
         "FID_conflict:", "_guard_", "__GSHandler", "__CxxFrame",
+        # MinGW runtime
+        "__mingw_", "_mingw_", "mingw_", "__gnu_",
+        "__do_global_", "__gcc_", "_Unwind_", "__gxx_",
+        "__cxa_", "_pei386_",
+        # GCC internals
+        "__register_frame", "__deregister_frame",
     ]
     for prefix in runtime_prefixes:
         if func_name.startswith(prefix):
+            return False
+    
+    # Skip CRT entry points (case-insensitive patterns)
+    crt_patterns = [
+        "crtStartup", "CRTStartup", "mainCRT", "WinMainCRT",
+        "tmainCRT", "wmainCRT", "dllmain", "DllMain",
+    ]
+    func_lower = func_name.lower()
+    for pattern in crt_patterns:
+        if pattern.lower() in func_lower:
             return False
     
     # Skip functions starting with double underscore (compiler-generated)

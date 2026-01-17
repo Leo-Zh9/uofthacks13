@@ -1,21 +1,40 @@
 'use client';
 
-import { useState } from 'react';
-import { motion } from 'framer-motion';
+import { useState, useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import Editor from '@monaco-editor/react';
-import { downloadAsFile } from '@/lib/api';
+import { downloadAsFile, FunctionCode } from '@/lib/api';
 
 interface CodeViewerProps {
-  rawCode: string;
-  refactoredCode: string;
+  functions: FunctionCode[];
+  rawCombined: string;
+  refactoredCombined: string;
   filename?: string;
 }
 
 type ViewMode = 'split' | 'raw' | 'refactored';
 
-export default function CodeViewer({ rawCode, refactoredCode, filename = 'decompiled' }: CodeViewerProps) {
+export default function CodeViewer({ 
+  functions, 
+  rawCombined, 
+  refactoredCombined, 
+  filename = 'decompiled' 
+}: CodeViewerProps) {
   const [viewMode, setViewMode] = useState<ViewMode>('split');
+  const [selectedFunction, setSelectedFunction] = useState<string>('__all__');
   const [copySuccess, setCopySuccess] = useState<string | null>(null);
+
+  // Get the current code to display based on selected function
+  const { rawCode, refactoredCode } = useMemo(() => {
+    if (selectedFunction === '__all__') {
+      return { rawCode: rawCombined, refactoredCode: refactoredCombined };
+    }
+    const func = functions.find(f => f.name === selectedFunction);
+    return {
+      rawCode: func?.raw_code || '// Function not found',
+      refactoredCode: func?.refactored_code || func?.raw_code || '// Not processed by AI',
+    };
+  }, [selectedFunction, functions, rawCombined, refactoredCombined]);
 
   const handleCopy = async (code: string, label: string) => {
     await navigator.clipboard.writeText(code);
@@ -24,7 +43,8 @@ export default function CodeViewer({ rawCode, refactoredCode, filename = 'decomp
   };
 
   const handleDownload = (code: string, suffix: string) => {
-    downloadAsFile(code, `${filename}_${suffix}.c`);
+    const funcSuffix = selectedFunction === '__all__' ? '' : `_${selectedFunction}`;
+    downloadAsFile(code, `${filename}${funcSuffix}_${suffix}.c`);
   };
 
   const editorOptions = {
@@ -110,11 +130,36 @@ export default function CodeViewer({ rawCode, refactoredCode, filename = 'decomp
 
   return (
     <div className="w-full h-full flex flex-col">
-      {/* Header with view mode toggle */}
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold text-[var(--foreground)]">
-          CODE COMPARISON
-        </h2>
+      {/* Header with function selector and view mode toggle */}
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-4">
+        <div className="flex items-center gap-4">
+          <h2 className="text-lg font-semibold text-[var(--foreground)]">
+            CODE COMPARISON
+          </h2>
+          
+          {/* Function selector */}
+          {functions.length > 0 && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-[var(--foreground-muted)]">FUNCTION:</span>
+              <select
+                value={selectedFunction}
+                onChange={(e) => setSelectedFunction(e.target.value)}
+                className="bg-[var(--background-tertiary)] border border-gray-700/50 rounded-lg 
+                         px-3 py-1.5 text-sm text-[var(--foreground)] outline-none
+                         focus:border-[var(--cyan)] transition-colors cursor-pointer
+                         max-w-[200px]"
+              >
+                <option value="__all__">All Functions ({functions.length})</option>
+                {functions.map((func) => (
+                  <option key={func.name} value={func.name}>
+                    {func.name}
+                    {func.refactored_code ? ' ✓' : ' ○'}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
         
         <div className="flex items-center gap-2">
           {/* View mode buttons */}
@@ -146,17 +191,55 @@ export default function CodeViewer({ rawCode, refactoredCode, filename = 'decomp
         </div>
       </div>
 
-      {/* Copy success notification */}
-      {copySuccess && (
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0 }}
-          className="absolute top-4 right-4 bg-[var(--green)] text-[var(--background)] px-4 py-2 rounded-lg text-sm font-medium z-50"
-        >
-          Copied {copySuccess}!
-        </motion.div>
+      {/* Function tabs for quick navigation */}
+      {functions.length > 1 && functions.length <= 10 && (
+        <div className="flex gap-1 mb-4 overflow-x-auto pb-2">
+          <button
+            onClick={() => setSelectedFunction('__all__')}
+            className={`
+              px-3 py-1.5 text-xs font-medium rounded-lg whitespace-nowrap transition-all
+              ${selectedFunction === '__all__'
+                ? 'bg-[var(--magenta)] text-white'
+                : 'bg-[var(--background-tertiary)] text-[var(--foreground-muted)] hover:text-[var(--foreground)]'
+              }
+            `}
+          >
+            ALL
+          </button>
+          {functions.map((func) => (
+            <button
+              key={func.name}
+              onClick={() => setSelectedFunction(func.name)}
+              className={`
+                px-3 py-1.5 text-xs font-medium rounded-lg whitespace-nowrap transition-all flex items-center gap-1.5
+                ${selectedFunction === func.name
+                  ? 'bg-[var(--cyan)] text-[var(--background)]'
+                  : 'bg-[var(--background-tertiary)] text-[var(--foreground-muted)] hover:text-[var(--foreground)]'
+                }
+              `}
+            >
+              {func.name}
+              {func.refactored_code && (
+                <span className={`w-1.5 h-1.5 rounded-full ${selectedFunction === func.name ? 'bg-[var(--background)]' : 'bg-[var(--green)]'}`} />
+              )}
+            </button>
+          ))}
+        </div>
       )}
+
+      {/* Copy success notification */}
+      <AnimatePresence>
+        {copySuccess && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            className="fixed top-4 right-4 bg-[var(--green)] text-[var(--background)] px-4 py-2 rounded-lg text-sm font-medium z-50"
+          >
+            Copied {copySuccess}!
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Code panels */}
       <div className="flex-1 min-h-0">

@@ -233,8 +233,9 @@ export default function Home() {
               {/* Code viewer */}
               <div className="flex-1 min-h-0">
                 <CodeViewer
-                  rawCode={result.raw_combined}
-                  refactoredCode={result.refactored_combined}
+                  functions={result.functions}
+                  rawCombined={result.raw_combined}
+                  refactoredCombined={result.refactored_combined}
                   filename={filename}
                 />
               </div>
