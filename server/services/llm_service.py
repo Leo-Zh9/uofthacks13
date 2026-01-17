@@ -1,125 +1,194 @@
 """
-LLM4Decompile service for converting Ghidra pseudo-code to correct C code.
+LLM4Decompile service for refining Ghidra pseudo-C into clean C code.
 
-This service uses the LLM4Decompile model from Hugging Face to convert
-messy Ghidra pseudo-code into compilable, correct C code.
+This service uses the LLM4Decompile-1.3b-v2 (Refine) model from Hugging Face.
+This model is specifically trained to take Ghidra's pseudo-C output and
+convert it into clean, valid C code.
 
-Model: LLM4Binary/llm4decompile-6.7b-v2
-- Specialized for decompilation tasks
-- Trained on 2B tokens of assembly/C pairs
-- 4-bit quantization for memory efficiency (~5-7GB RAM)
+Model: LLM4Binary/llm4decompile-1.3b-v2
+- 1.3B parameters (small and fast)
+- Trained specifically on Ghidra pseudo-C refinement
+- ~0.8GB with 4-bit quantization, ~2.6GB FP16
 """
 
 import os
 from typing import Optional, Tuple
 
+# Check if disabled via environment variable
+DISABLED_BY_ENV = os.environ.get("DISABLE_LLM4DECOMPILE", "").lower() in ("true", "1", "yes")
+if DISABLED_BY_ENV:
+    print("[*] LLM4Decompile disabled via DISABLE_LLM4DECOMPILE env var")
+
 # Check if we can use the model
 LLM4DECOMPILE_AVAILABLE = False
+BITSANDBYTES_AVAILABLE = False
 _model = None
 _tokenizer = None
+torch = None
 
-# Try to import torch and transformers
-try:
-    import torch
-    from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
-    LLM4DECOMPILE_AVAILABLE = True
-except ImportError as e:
-    print(f"[!] LLM4Decompile dependencies not available: {e}")
-    print("[*] Install with: pip install torch transformers accelerate bitsandbytes")
+if not DISABLED_BY_ENV:
+    # Try to import torch and transformers
+    try:
+        import torch as _torch
+        torch = _torch
+        from transformers import AutoTokenizer, AutoModelForCausalLM
+        print(f"[+] PyTorch {torch.__version__} loaded successfully")
+        
+        # Check for CUDA
+        if torch.cuda.is_available():
+            print(f"[+] CUDA available: {torch.cuda.get_device_name(0)}")
+        else:
+            print("[*] Running on CPU (slower inference)")
+        
+        # Check for bitsandbytes (for 4-bit quantization)
+        try:
+            from transformers import BitsAndBytesConfig
+            import bitsandbytes
+            BITSANDBYTES_AVAILABLE = True
+            print("[+] bitsandbytes available for 4-bit quantization (~0.8GB RAM)")
+        except ImportError:
+            print("[*] bitsandbytes not available - will use FP16 (~2.6GB RAM)")
+        
+        LLM4DECOMPILE_AVAILABLE = True
+        
+    except ImportError as e:
+        print(f"[!] LLM4Decompile dependencies not available: {e}")
+        print("[*] Install with: pip install torch transformers accelerate")
+    except OSError as e:
+        print(f"[!] LLM4Decompile DLL/SO loading failed: {e}")
+        print("[*] Try reinstalling torch in a clean environment")
+    except Exception as e:
+        print(f"[!] Unexpected error loading LLM4Decompile: {e}")
 
-MODEL_ID = "LLM4Binary/llm4decompile-6.7b-v2"
+# Use the 1.3B Refine model - trained specifically on Ghidra pseudo-C
+MODEL_ID = "LLM4Binary/llm4decompile-1.3b-v2"
 
 
 def is_available() -> bool:
     """Check if LLM4Decompile is available."""
-    return LLM4DECOMPILE_AVAILABLE
+    return LLM4DECOMPILE_AVAILABLE and not DISABLED_BY_ENV
 
 
 def get_model() -> Tuple[Optional[object], Optional[object]]:
     """
-    Lazy-load the LLM4Decompile model with 4-bit quantization.
+    Lazy-load the LLM4Decompile 1.3B model.
+    Uses 4-bit quantization if bitsandbytes is available, otherwise FP16.
     Returns (model, tokenizer) tuple.
     """
     global _model, _tokenizer
     
-    if not LLM4DECOMPILE_AVAILABLE:
-        print("[!] LLM4Decompile not available - missing dependencies")
+    if not is_available():
+        print("[!] LLM4Decompile not available")
         return None, None
     
     if _model is None:
-        print(f"[*] Loading LLM4Decompile 6.7B (4-bit quantized)...")
-        print(f"[*] This may take 1-2 minutes on first load...")
+        from transformers import AutoTokenizer, AutoModelForCausalLM
         
         try:
-            # 4-bit quantization config for memory efficiency
-            # Reduces ~28GB model to ~5-7GB
-            bnb_config = BitsAndBytesConfig(
-                load_in_4bit=True,
-                bnb_4bit_compute_dtype=torch.float16,
-                bnb_4bit_quant_type="nf4",
-                bnb_4bit_use_double_quant=True,  # Further memory savings
-            )
-            
-            _tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
-            _model = AutoModelForCausalLM.from_pretrained(
-                MODEL_ID,
-                quantization_config=bnb_config,
-                device_map="auto",
-                low_cpu_mem_usage=True,
-                trust_remote_code=True,
-            )
+            if BITSANDBYTES_AVAILABLE and torch.cuda.is_available():
+                # 4-bit quantization for memory efficiency (~0.8GB)
+                from transformers import BitsAndBytesConfig
+                print(f"[*] Loading LLM4Decompile 1.3B (4-bit quantized)...")
+                print(f"[*] This may take 30-60 seconds on first load...")
+                
+                bnb_config = BitsAndBytesConfig(
+                    load_in_4bit=True,
+                    bnb_4bit_compute_dtype=torch.float16,
+                    bnb_4bit_quant_type="nf4",
+                    bnb_4bit_use_double_quant=True,
+                )
+                
+                _tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
+                _model = AutoModelForCausalLM.from_pretrained(
+                    MODEL_ID,
+                    quantization_config=bnb_config,
+                    device_map="auto",
+                    low_cpu_mem_usage=True,
+                    trust_remote_code=True,
+                )
+            else:
+                # FP16 without quantization (~2.6GB RAM for 1.3B model)
+                print(f"[*] Loading LLM4Decompile 1.3B (FP16)...")
+                print(f"[*] This may take 30-60 seconds on first load...")
+                
+                _tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
+                
+                # Use GPU if available, otherwise CPU
+                if torch.cuda.is_available():
+                    _model = AutoModelForCausalLM.from_pretrained(
+                        MODEL_ID,
+                        torch_dtype=torch.float16,
+                        device_map="auto",
+                        low_cpu_mem_usage=True,
+                        trust_remote_code=True,
+                    )
+                else:
+                    # CPU inference - use float32 for stability
+                    _model = AutoModelForCausalLM.from_pretrained(
+                        MODEL_ID,
+                        torch_dtype=torch.float32,
+                        low_cpu_mem_usage=True,
+                        trust_remote_code=True,
+                    )
             
             # Set pad token if not set
             if _tokenizer.pad_token is None:
                 _tokenizer.pad_token = _tokenizer.eos_token
             
-            print(f"[+] LLM4Decompile model loaded successfully")
-            print(f"[+] Device: {next(_model.parameters()).device}")
+            device = next(_model.parameters()).device
+            print(f"[+] LLM4Decompile 1.3B model loaded successfully")
+            print(f"[+] Device: {device}")
             
         except Exception as e:
             print(f"[!] Failed to load LLM4Decompile model: {e}")
+            import traceback
+            traceback.print_exc()
             return None, None
     
     return _model, _tokenizer
 
 
-def decompile_to_c(pseudo_code: str) -> str:
+def decompile_to_c(ghidra_pseudo_c: str) -> str:
     """
-    Stage 1: Convert Ghidra pseudo-code to correct C using LLM4Decompile.
+    Refine Ghidra pseudo-C into clean C code using LLM4Decompile.
     
-    The model expects a specific prompt format:
-    # This is the assembly code:
-    <pseudo_code>
+    The LLM4Decompile-1.3b-v2 (Refine) model expects Ghidra's pseudo-C
+    format as input and outputs cleaner C code.
+    
+    Prompt format for Refine model:
+    # This is the Ghidra pseudo-C:
+    <ghidra_code>
     # What is the source code?
     
     Args:
-        pseudo_code: Raw Ghidra pseudo-code to decompile
+        ghidra_pseudo_c: Raw Ghidra pseudo-C code to refine
         
     Returns:
-        Corrected C code (or original if model unavailable)
+        Refined C code (or original if model unavailable)
     """
     model, tokenizer = get_model()
     
     if model is None or tokenizer is None:
         print("[!] LLM4Decompile not available, returning original code")
-        return pseudo_code
+        return ghidra_pseudo_c
     
-    # LLM4Decompile expects this specific prompt format
-    prompt = f"# This is the assembly code:\n{pseudo_code}\n# What is the source code?\n"
+    # LLM4Decompile Refine model prompt format
+    # The model expects Ghidra pseudo-C and outputs refined C
+    prompt = f"# This is the Ghidra pseudo-C:\n{ghidra_pseudo_c}\n# What is the source code?\n"
     
     try:
         inputs = tokenizer(
             prompt, 
             return_tensors="pt",
             truncation=True,
-            max_length=4096,  # Model's max context
+            max_length=4096,
         ).to(model.device)
         
         with torch.no_grad():
             outputs = model.generate(
                 **inputs,
                 max_new_tokens=2048,
-                do_sample=False,  # Deterministic output for consistency
+                do_sample=False,  # Deterministic for consistency
                 pad_token_id=tokenizer.eos_token_id,
                 eos_token_id=tokenizer.eos_token_id,
             )
@@ -135,7 +204,9 @@ def decompile_to_c(pseudo_code: str) -> str:
         
     except Exception as e:
         print(f"[!] Error during LLM4Decompile inference: {e}")
-        return pseudo_code
+        import traceback
+        traceback.print_exc()
+        return ghidra_pseudo_c
 
 
 def mock_decompile_to_c(pseudo_code: str) -> str:
@@ -145,13 +216,16 @@ def mock_decompile_to_c(pseudo_code: str) -> str:
     """
     result = pseudo_code
     
-    # Basic type fixes
+    # Basic type fixes (Ghidra-specific types)
     result = result.replace("undefined8", "uint64_t")
     result = result.replace("undefined4", "uint32_t")
     result = result.replace("undefined2", "uint16_t")
+    result = result.replace("undefined1", "uint8_t")
     result = result.replace("undefined", "uint8_t")
+    result = result.replace("longlong", "int64_t")
+    result = result.replace("ulonglong", "uint64_t")
     
-    # Basic variable renames (simple patterns)
+    # Basic pointer fixes
     result = result.replace("(void *)0x0", "NULL")
     result = result.replace("== 0x0", "== NULL")
     result = result.replace("!= 0x0", "!= NULL")

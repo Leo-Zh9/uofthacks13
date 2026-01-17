@@ -1,0 +1,29 @@
+services:
+  # Backend with GPU support - FastAPI server with PyGhidra + LLM4Decompile
+  backend:
+    build:
+      context: ./server
+      dockerfile: Dockerfile.gpu
+    ports:
+      - "8000:8000"
+    environment:
+      - GHIDRA_INSTALL_DIR=/opt/ghidra
+      - GHIDRA_PROJECT_DIR=/tmp/ghidra_projects
+      # Process more functions with GPU (much faster)
+      - MAX_FUNCTIONS=20
+    volumes:
+      - ghidra-temp:/tmp/ghidra_projects
+    tmpfs:
+      - /tmp:size=1G,mode=1777
+    # Enable NVIDIA GPU
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+volumes:
+  ghidra-temp:
+    driver: local

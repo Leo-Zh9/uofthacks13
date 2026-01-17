@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # Frontend - Next.js application
   frontend:
@@ -23,35 +21,28 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
       - GHIDRA_INSTALL_DIR=/opt/ghidra
       - GHIDRA_PROJECT_DIR=/tmp/ghidra_projects
+      # Limit functions to process (CPU is slow, default 10)
+      - MAX_FUNCTIONS=5
+      # Set DISABLE_LLM4DECOMPILE=true to skip and use mock transformation
+      # - DISABLE_LLM4DECOMPILE=true
     volumes:
       # Mount for temporary files only - no persistent storage of binaries
       - ghidra-temp:/tmp/ghidra_projects
-    # Security: Run with limited capabilities
-    cap_drop:
-      - ALL
-    cap_add:
-      - NET_BIND_SERVICE
-    # Security: Read-only root filesystem except for temp directories
-    read_only: true
     tmpfs:
-      - /tmp:size=512M,mode=1777
-    # Security: No privilege escalation
-    security_opt:
-      - no-new-privileges:true
+      - /tmp:size=1G,mode=1777
     networks:
       - app-network
-    # Resource limits
+    # Resource limits - increased for Ghidra analysis
     deploy:
       resources:
         limits:
+          cpus: '4'
+          memory: 8G
+        reservations:
           cpus: '2'
           memory: 4G
-        reservations:
-          cpus: '1'
-          memory: 2G
 
 volumes:
   ghidra-temp:

@@ -90,22 +90,39 @@ async def process_binary(job_id: str, file_path: str):
         ])
         jobs[job_id]["raw_combined"] = raw_combined
         
-        # Stage 3: AI Refactoring (Two-stage pipeline)
+        # Stage 3: AI Refactoring with LLM4Decompile
         update_job_status(job_id, JobStatus.AI_REFACTORING, "AI refactoring code...", 60)
-        add_log(job_id, "[*] Starting two-stage AI pipeline...")
-        add_log(job_id, "[*] Stage 1: LLM4Decompile (correctness)")
-        add_log(job_id, "[*] Stage 2: GPT-4o (readability)")
+        add_log(job_id, "[*] Starting LLM4Decompile refinement...")
+        
+        # Limit functions to process (CPU inference is slow)
+        # Prioritize: entry, main, and first few functions
+        MAX_FUNCTIONS = int(os.environ.get("MAX_FUNCTIONS", "10"))
+        priority_names = ["entry", "main", "_main", "WinMain", "_start"]
+        
+        # Sort functions: priority first, then others
+        sorted_funcs = []
+        other_funcs = []
+        for name, code in functions.items():
+            if any(p in name.lower() for p in ["entry", "main", "start"]):
+                sorted_funcs.append((name, code))
+            else:
+                other_funcs.append((name, code))
+        sorted_funcs.extend(other_funcs)
+        
+        # Limit to MAX_FUNCTIONS
+        funcs_to_process = sorted_funcs[:MAX_FUNCTIONS]
+        skipped = len(functions) - len(funcs_to_process)
+        if skipped > 0:
+            add_log(job_id, f"[*] Processing {len(funcs_to_process)} functions (skipping {skipped} for speed)")
         
         refactored_functions = {}
-        total_functions = len(functions)
-        for i, (func_name, func_code) in enumerate(functions.items()):
+        total_functions = len(funcs_to_process)
+        for i, (func_name, func_code) in enumerate(funcs_to_process):
             add_log(job_id, f"[*] Processing function: {func_name}")
             progress = 60 + int((i / total_functions) * 35)
             update_job_status(job_id, JobStatus.AI_REFACTORING, f"Refactoring {func_name}...", progress)
             
-            # Get context from other functions (signatures)
-            context_funcs = {k: v.split("{")[0] + ";" for k, v in functions.items() if k != func_name}
-            refactored = await refactor_code(func_name, func_code, context_funcs)
+            refactored = await refactor_code(func_name, func_code)
             refactored_functions[func_name] = refactored
             add_log(job_id, f"[+] Completed: {func_name}")
         
