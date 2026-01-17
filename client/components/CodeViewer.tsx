@@ -23,10 +23,26 @@ export default function CodeViewer({
   const [viewMode, setViewMode] = useState<ViewMode>('split');
   const [selectedFunction, setSelectedFunction] = useState<string>('__all__');
   const [copySuccess, setCopySuccess] = useState<string | null>(null);
+  const [showOnlyAI, setShowOnlyAI] = useState<boolean>(true);
+  
+  // Filter to only AI-processed functions if toggle is on
+  const displayFunctions = showOnlyAI 
+    ? functions.filter(f => f.refactored_code !== null && f.refactored_code !== undefined)
+    : functions;
 
   // Get the current code to display based on selected function
   const { rawCode, refactoredCode } = useMemo(() => {
     if (selectedFunction === '__all__') {
+      // When showing all, use only AI-processed functions if toggle is on
+      if (showOnlyAI) {
+        const aiProcessed = functions.filter(f => f.refactored_code);
+        const rawCombinedFiltered = aiProcessed.map(f => `// Function: ${f.name}\n${f.raw_code}`).join('\n\n');
+        const refactoredCombinedFiltered = aiProcessed.map(f => `// Function: ${f.name}\n${f.refactored_code}`).join('\n\n');
+        return { 
+          rawCode: rawCombinedFiltered || '// No AI-processed functions', 
+          refactoredCode: refactoredCombinedFiltered || '// No AI-processed functions' 
+        };
+      }
       return { rawCode: rawCombined, refactoredCode: refactoredCombined };
     }
     const func = functions.find(f => f.name === selectedFunction);
@@ -34,7 +50,7 @@ export default function CodeViewer({
       rawCode: func?.raw_code || '// Function not found',
       refactoredCode: func?.refactored_code || func?.raw_code || '// Not processed by AI',
     };
-  }, [selectedFunction, functions, rawCombined, refactoredCombined]);
+  }, [selectedFunction, functions, rawCombined, refactoredCombined, showOnlyAI]);
 
   const handleCopy = async (code: string, label: string) => {
     await navigator.clipboard.writeText(code);
@@ -138,7 +154,7 @@ export default function CodeViewer({
           </h2>
           
           {/* Function selector */}
-          {functions.length > 0 && (
+          {displayFunctions.length > 0 && (
             <div className="flex items-center gap-2">
               <span className="text-xs text-[var(--foreground-muted)]">FUNCTION:</span>
               <select
@@ -149,8 +165,8 @@ export default function CodeViewer({
                          focus:border-[var(--cyan)] transition-colors cursor-pointer
                          max-w-[200px]"
               >
-                <option value="__all__">All Functions ({functions.length})</option>
-                {functions.map((func) => (
+                <option value="__all__">All Functions ({displayFunctions.length})</option>
+                {displayFunctions.map((func) => (
                   <option key={func.name} value={func.name}>
                     {func.name}
                     {func.refactored_code ? ' ✓' : ' ○'}
@@ -159,6 +175,21 @@ export default function CodeViewer({
               </select>
             </div>
           )}
+          
+          {/* AI-only toggle */}
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={showOnlyAI}
+              onChange={(e) => {
+                setShowOnlyAI(e.target.checked);
+                setSelectedFunction('__all__');
+              }}
+              className="w-4 h-4 rounded border-gray-600 bg-[var(--background-tertiary)] 
+                       text-[var(--cyan)] focus:ring-[var(--cyan)] focus:ring-offset-0"
+            />
+            <span className="text-xs text-[var(--foreground-muted)]">AI ONLY</span>
+          </label>
         </div>
         
         <div className="flex items-center gap-2">
@@ -192,7 +223,7 @@ export default function CodeViewer({
       </div>
 
       {/* Function tabs for quick navigation */}
-      {functions.length > 1 && functions.length <= 10 && (
+      {displayFunctions.length > 1 && displayFunctions.length <= 10 && (
         <div className="flex gap-1 mb-4 overflow-x-auto pb-2">
           <button
             onClick={() => setSelectedFunction('__all__')}
@@ -206,7 +237,7 @@ export default function CodeViewer({
           >
             ALL
           </button>
-          {functions.map((func) => (
+          {displayFunctions.map((func) => (
             <button
               key={func.name}
               onClick={() => setSelectedFunction(func.name)}

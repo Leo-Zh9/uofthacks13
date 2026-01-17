@@ -225,7 +225,7 @@ export default function Home() {
                 <div>
                   <h3 className="text-[var(--green)] font-semibold">Analysis Complete!</h3>
                   <p className="text-[var(--foreground-muted)] text-sm">
-                    Successfully decompiled {result.functions.length} functions
+                    AI-processed {result.functions.filter(f => f.refactored_code).length} of {result.functions.length} functions
                   </p>
                 </div>
               </motion.div>

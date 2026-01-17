@@ -114,6 +114,11 @@ def is_user_function(func, func_name: str) -> bool:
     - SKIP_FUN_FUNCTIONS: Set to "true" to skip ALL FUN_* functions (faster for demos)
     - MIN_FUNCTION_SIZE: Minimum bytes for FUN_* functions (default 50)
     """
+    # ALWAYS keep main, _main, wmain, WinMain - these are user entry points!
+    priority_names = ["main", "_main", "wmain", "_wmain", "winmain", "_winmain", "wwinmain"]
+    if func_name.lower() in priority_names:
+        return True
+    
     # Skip external and thunk functions
     if func.isExternal() or func.isThunk():
         return False
