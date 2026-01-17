@@ -9,12 +9,50 @@ Requires:
 
 import os
 import shutil
-from typing import Dict, Optional
+from typing import Dict, Optional, Set
 
 # Check if Ghidra is properly configured
 GHIDRA_INSTALL_DIR = os.environ.get("GHIDRA_INSTALL_DIR")
 GHIDRA_AVAILABLE = False
 _ghidra_started = False
+
+# Common library functions to SKIP (these are not user-written)
+LIBRARY_FUNCTIONS: Set[str] = {
+    # C standard library
+    "malloc", "free", "calloc", "realloc",
+    "printf", "fprintf", "sprintf", "snprintf", "vprintf", "vfprintf",
+    "scanf", "fscanf", "sscanf",
+    "fopen", "fclose", "fread", "fwrite", "fseek", "ftell", "fflush",
+    "fgets", "fputs", "fgetc", "fputc", "getc", "putc", "getchar", "putchar",
+    "strlen", "strcpy", "strncpy", "strcat", "strncat", "strcmp", "strncmp",
+    "strchr", "strrchr", "strstr", "strtok", "strdup",
+    "memcpy", "memmove", "memset", "memcmp", "memchr",
+    "atoi", "atol", "atof", "strtol", "strtoul", "strtod",
+    "abs", "labs", "rand", "srand",
+    "exit", "abort", "atexit", "_exit",
+    "isalpha", "isdigit", "isalnum", "isspace", "isupper", "islower",
+    "toupper", "tolower",
+    "time", "clock", "difftime", "mktime", "localtime", "gmtime",
+    "qsort", "bsearch",
+    # Windows API
+    "GetLastError", "SetLastError", "GetModuleHandle", "GetProcAddress",
+    "LoadLibrary", "FreeLibrary", "GetModuleFileName",
+    "CreateFile", "ReadFile", "WriteFile", "CloseHandle",
+    "VirtualAlloc", "VirtualFree", "VirtualProtect",
+    "HeapAlloc", "HeapFree", "HeapReAlloc",
+    "GetProcessHeap", "GetCurrentProcess", "GetCurrentThread",
+    "ExitProcess", "TerminateProcess",
+    "MessageBox", "MessageBoxA", "MessageBoxW",
+    # MSVC runtime
+    "__security_check_cookie", "__security_init_cookie",
+    "__GSHandlerCheck", "__CxxFrameHandler3", "__CxxFrameHandler4",
+    "_initterm", "_initterm_e", "__acrt_iob_func",
+    "_cexit", "_c_exit", "_exit", "__p___argc", "__p___argv",
+    # Compiler-generated
+    "_start", "__libc_start_main", "__gmon_start__",
+    "__cxa_atexit", "__cxa_finalize",
+    "_fini", "_init",
+}
 
 # Only try to use PyGhidra if GHIDRA_INSTALL_DIR is set
 if GHIDRA_INSTALL_DIR and os.path.exists(GHIDRA_INSTALL_DIR):
@@ -51,9 +89,59 @@ def start_ghidra():
             _ghidra_started = True
 
 
+def is_user_function(func, func_name: str) -> bool:
+    """
+    Determine if a function is likely written by the developer (not a library function).
+    
+    Returns True for user functions, False for library/runtime functions.
+    """
+    # Skip external and thunk functions
+    if func.isExternal() or func.isThunk():
+        return False
+    
+    # Skip known library function names
+    if func_name.lower() in {f.lower() for f in LIBRARY_FUNCTIONS}:
+        return False
+    
+    # Skip MSVC runtime functions (start with __scrt_, __acrt_, __vcrt_, etc.)
+    runtime_prefixes = [
+        "__scrt_", "__acrt_", "__vcrt_", "__std_", "__crt_",
+        "_CRT_", "_RTC_", "__security_", "__report_", "__raise_",
+        "FID_conflict:", "_guard_", "__GSHandler", "__CxxFrame",
+    ]
+    for prefix in runtime_prefixes:
+        if func_name.startswith(prefix):
+            return False
+    
+    # Skip functions starting with double underscore (compiler-generated)
+    if func_name.startswith("__"):
+        return False
+    
+    # Skip functions starting with single underscore (usually compiler-generated)
+    # But keep _main, _WinMain, _start
+    if func_name.startswith("_"):
+        keep_names = ["_main", "_winmain", "_start", "_wmain"]
+        if func_name.lower() not in keep_names:
+            return False
+    
+    # Skip FUN_ functions that are very short (likely stubs)
+    body = func.getBody()
+    if body:
+        num_addrs = body.getNumAddresses()
+        # For FUN_* functions, require at least 20 instructions
+        if func_name.startswith("FUN_") and num_addrs < 20:
+            return False
+        # For named functions, require at least 10 instructions
+        elif num_addrs < 10:
+            return False
+    
+    return True
+
+
 def decompile_binary(file_path: str, job_id: str) -> Dict[str, str]:
     """
     Decompile a binary file and return a mapping of function names to decompiled C code.
+    Filters to only include user-written functions (not library code).
     
     Args:
         file_path: Path to the binary file to decompile
@@ -107,14 +195,23 @@ def decompile_binary(file_path: str, job_id: str) -> Dict[str, str]:
                 func_manager = program.getFunctionManager()
                 func_iterator = func_manager.getFunctions(True)
                 
-                print(f"[*] Decompiling functions...")
+                print(f"[*] Identifying user-written functions...")
+                user_functions = []
+                skipped_count = 0
+                
                 for func in func_iterator:
                     func_name = func.getName()
                     
-                    # Skip external/thunk functions
-                    if func.isExternal() or func.isThunk():
-                        continue
-                    
+                    if is_user_function(func, func_name):
+                        user_functions.append((func, func_name))
+                    else:
+                        skipped_count += 1
+                
+                print(f"[+] Found {len(user_functions)} user functions (skipped {skipped_count} library functions)")
+                
+                # Decompile user functions
+                print(f"[*] Decompiling user functions...")
+                for func, func_name in user_functions:
                     # Decompile the function with a 30-second timeout per function
                     result = decompiler.decompileFunction(func, 30, pyghidra.task_monitor())
                     
@@ -151,7 +248,7 @@ def _mock_decompile(file_path: str) -> Dict[str, str]:
     """
     filename = os.path.basename(file_path)
     
-    # Return mock decompiled code
+    # Return mock decompiled code (simulating user-written functions only)
     return {
         "main": f'''int main(int argc, char **argv)
 {{
@@ -167,7 +264,7 @@ def _mock_decompile(file_path: str) -> Dict[str, str]:
         goto LAB_00401050;
     }}
     
-    uVar2 = FUN_00401100(argv[1]);
+    uVar2 = process_input(argv[1]);
     if ((int)uVar2 == 0) {{
         pcVar3 = "Error processing input\\n";
 LAB_00401050:
@@ -175,13 +272,13 @@ LAB_00401050:
         iVar1 = 1;
     }}
     else {{
-        lVar4 = FUN_00401200((long)uVar2);
+        lVar4 = calculate_result((long)uVar2);
         printf("Result: %ld\\n", lVar4);
     }}
     
     return iVar1;
 }}''',
-        "FUN_00401100": '''undefined8 FUN_00401100(char *param_1)
+        "process_input": '''undefined8 process_input(char *param_1)
 {{
     size_t sVar1;
     void *pvVar2;
@@ -203,7 +300,7 @@ LAB_00401050:
     }}
     return uVar3;
 }}''',
-        "FUN_00401200": '''long FUN_00401200(long param_1)
+        "calculate_result": '''long calculate_result(long param_1)
 {{
     long lVar1;
     int iVar2;
@@ -219,22 +316,5 @@ LAB_00401050:
         }} while (lVar3 < 10);
     }}
     return lVar1;
-}}''',
-        "FUN_00401300": '''void FUN_00401300(void *param_1, int param_2)
-{{
-    int iVar1;
-    int iVar2;
-    void *pvVar3;
-    
-    if ((param_1 != (void *)0x0) && (param_2 != 0)) {{
-        iVar1 = 0;
-        while (iVar1 < param_2) {{
-            pvVar3 = (void *)((long)param_1 + (long)iVar1);
-            iVar2 = iVar1 + 1;
-            *(undefined *)pvVar3 = 0;
-            iVar1 = iVar2;
-        }}
-    }}
-    return;
 }}''',
     }

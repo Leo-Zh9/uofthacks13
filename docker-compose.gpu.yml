@@ -9,8 +9,8 @@ services:
     environment:
       - GHIDRA_INSTALL_DIR=/opt/ghidra
       - GHIDRA_PROJECT_DIR=/tmp/ghidra_projects
-      # Process more functions with GPU (much faster)
-      - MAX_FUNCTIONS=20
+      # Limit functions to process
+      - MAX_FUNCTIONS=5
     volumes:
       - ghidra-temp:/tmp/ghidra_projects
     tmpfs:

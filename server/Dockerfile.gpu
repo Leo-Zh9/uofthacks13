@@ -1,68 +1,49 @@
-# GPU-enabled Backend Dockerfile for Decompiler API
-# Uses NVIDIA CUDA with Python and Ghidra
+# Stage 1: Downloader
+FROM alpine:latest AS downloader
+RUN apk add --no-cache wget unzip
+WORKDIR /tmp
+ENV GHIDRA_VERSION=12.0.1
+RUN wget -q https://github.com/NationalSecurityAgency/ghidra/releases/download/Ghidra_${GHIDRA_VERSION}_build/ghidra_${GHIDRA_VERSION}_PUBLIC_20260114.zip -O ghidra.zip && \
+    unzip -q ghidra.zip && \
+    mv ghidra_${GHIDRA_VERSION}_PUBLIC /opt/ghidra
 
-FROM nvidia/cuda:12.1.0-runtime-ubuntu22.04
+# Stage 2: Final Image (Using official PyTorch image)
+# This image already has Torch and CUDA pre-installed!
+FROM pytorch/pytorch:2.5.1-cuda12.1-cudnn9-runtime
 
-# Install Java 21, Python and dependencies
-RUN apt-get update && apt-get install -y \
-    openjdk-21-jdk \
-    python3 \
-    python3-pip \
-    python3-venv \
-    python3-dev \
-    build-essential \
-    wget \
-    unzip \
-    git \
-    && rm -rf /var/lib/apt/lists/*
-
-# Set environment variables
+ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
-ENV GHIDRA_VERSION=12.0.1
 ENV GHIDRA_INSTALL_DIR=/opt/ghidra
 ENV JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
+ENV PATH="/opt/venv/bin:$PATH"
 
-# Download and install Ghidra 12.0.1
-RUN wget -q https://github.com/NationalSecurityAgency/ghidra/releases/download/Ghidra_${GHIDRA_VERSION}_build/ghidra_${GHIDRA_VERSION}_PUBLIC_20260114.zip \
-    -O /tmp/ghidra.zip \
-    && unzip -q /tmp/ghidra.zip -d /opt \
-    && mv /opt/ghidra_${GHIDRA_VERSION}_PUBLIC ${GHIDRA_INSTALL_DIR} \
-    && rm /tmp/ghidra.zip
+# Install Headless JRE (Python is already in this base image)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    openjdk-21-jre-headless \
+    wget \
+    unzip \
+    && rm -rf /var/lib/apt/lists/*
 
-# Create app user for security
-RUN useradd --create-home --shell /bin/bash appuser
+# Copy Ghidra from downloader stage
+COPY --from=downloader /opt/ghidra /opt/ghidra
 
-# Set working directory
-WORKDIR /app
-
-# Create virtual environment
-RUN python3 -m venv /app/venv
-ENV PATH="/app/venv/bin:$PATH"
-
-# Copy and install Python dependencies
-# Install PyTorch with CUDA 12.1 support
+# Create venv and install only the REMAINING small packages
+# (Torch is already in the base image's global python)
+RUN python3 -m venv /opt/venv
 COPY requirements.txt .
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cu121 && \
-    pip install --no-cache-dir -r requirements.txt && \
+RUN pip install --no-cache-dir -r requirements.txt && \
     pip install --no-cache-dir bitsandbytes
 
-# Copy application code
+# App setup
+WORKDIR /app
 COPY . .
 
-# Change ownership to app user
-RUN chown -R appuser:appuser /app
+RUN useradd --create-home --shell /bin/bash appuser && \
+    mkdir -p /tmp/ghidra_projects && \
+    chown -R appuser:appuser /app /tmp/ghidra_projects
 
-# Create temp directories with proper permissions
-RUN mkdir -p /tmp/ghidra_projects && \
-    chown -R appuser:appuser /tmp/ghidra_projects
-
-# Switch to non-root user
 USER appuser
-
-# Expose port
 EXPOSE 8000
 
-# Run the application
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

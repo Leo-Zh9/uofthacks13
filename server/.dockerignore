@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+*$py.class
+.env
+.venv
+venv/
+ENV/
+env/
+.cursor/
+.git/
+.github/
+ghidra_projects/
+temp/
+tmp/
+*.exe
+*.elf
+*.bin
