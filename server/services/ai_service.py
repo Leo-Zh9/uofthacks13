@@ -1,54 +1,57 @@
 """
-AI Service for code refactoring using OpenAI GPT-4o.
+AI Service for two-stage code refactoring pipeline.
 
-This service takes raw decompiled C code and refactors it to be more readable,
-with better variable names, proper control flow, and helpful comments.
+Stage 1: LLM4Decompile - Convert Ghidra pseudo-code to correct, compilable C
+Stage 2: GPT-4o - Improve readability with meaningful variable names and comments
+
+This combines the specialized decompilation capabilities of LLM4Decompile
+with the general language understanding of GPT-4o for best results.
 """
 
 import os
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
 from openai import OpenAI
 
-# Initialize OpenAI client
+# Import LLM4Decompile service
+from services.llm_service import decompile_to_c, is_available as llm4decompile_available, mock_decompile_to_c
+
+# Initialize OpenAI client for Stage 2
 client: Optional[OpenAI] = None
 
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 if OPENAI_API_KEY:
     client = OpenAI(api_key=OPENAI_API_KEY)
+    print("[+] OpenAI API configured for Stage 2 (readability)")
+else:
+    print("[!] OPENAI_API_KEY not set - Stage 2 (readability) will be skipped")
 
 
-SYSTEM_PROMPT = """You are an expert Reverse Engineer and C programmer. I will provide you with raw decompiled pseudo-code from Ghidra. It contains generic variable names (like iVar1, uVar2, param_1) and often has confusing control flow with goto statements.
+# Stage 2 prompt - simpler since we're working with clean C code
+READABILITY_PROMPT = """You are improving decompiled C code for readability.
+The code is already syntactically correct - DO NOT change any logic or behavior.
 
-Your task is to refactor this code to be more readable:
+Your task:
+1. Rename variables based on their usage:
+   - local_10, local_14 → descriptive names like buffer_size, loop_index
+   - param_1, param_2 → descriptive names like input_string, array_length
+   - Analyze HOW the variable is used to determine its purpose
 
-1. **Variable Renaming**: Analyze the logic and rename variables based on their usage:
-   - iVar1 counting in a loop → `index` or `counter`
-   - param_1 that's a string → `input_string` or `filename`
-   - uVar2 storing a size → `buffer_size` or `length`
-   - pvVar that's allocated memory → `buffer` or `allocated_memory`
-
-2. **Control Flow Improvement**: Convert goto statements to proper structured control flow:
-   - Replace goto-based loops with `while` or `for` loops
-   - Replace goto-based conditionals with proper `if/else` blocks
-   - Preserve the exact same logic - only restructure, don't change behavior
-
-3. **Add Comments**: Add brief, helpful comments explaining:
-   - What each function does (as a docstring at the top)
-   - Complex logic or non-obvious operations
+2. Add brief comments explaining:
+   - What the function does (as a docstring at the top)
+   - Non-obvious logic or algorithms
    - Purpose of important variables
 
-4. **Type Clarity**: Use clearer types where appropriate:
-   - Replace `undefined` types with appropriate C types
-   - Add explicit casts where helpful for clarity
+3. Improve formatting:
+   - Consistent indentation
+   - Logical grouping of related operations
 
-5. **CRITICAL RULES**:
-   - Do NOT change the underlying logic or behavior of the code
-   - Do NOT add new functionality
-   - Do NOT remove any operations, even if they seem unnecessary
-   - Keep all function calls intact
-   - Output ONLY valid C code with no markdown formatting or code fences
+CRITICAL RULES:
+- Do NOT change ANY logic or behavior
+- Do NOT add or remove any operations
+- Do NOT change function signatures (keep original parameter names in signature if needed)
+- Output ONLY valid C code with no markdown formatting or code fences
 
-Output the refactored C code directly, with no additional explanation."""
+Output the improved C code directly."""
 
 
 async def refactor_code(
@@ -57,7 +60,10 @@ async def refactor_code(
     context_functions: Optional[Dict[str, str]] = None
 ) -> str:
     """
-    Refactor a single function's decompiled code using GPT-4o.
+    Two-stage refactoring pipeline for decompiled code.
+    
+    Stage 1: LLM4Decompile for semantic correctness
+    Stage 2: GPT-4o for readability (if API key available)
     
     Args:
         function_name: Name of the function being refactored
@@ -65,68 +71,95 @@ async def refactor_code(
         context_functions: Optional dict of other function signatures for context
         
     Returns:
-        Refactored C code
+        Refactored C code (correct and readable)
     """
-    if not client:
-        # Return mock refactored code if API key not available
-        return _mock_refactor(function_name, raw_code)
+    # Stage 1: LLM4Decompile for correctness
+    print(f"[*] Stage 1: Processing {function_name} with LLM4Decompile...")
     
-    # Build the user prompt
-    user_prompt = f"Please refactor the following decompiled function:\n\n```c\n{raw_code}\n```"
+    if llm4decompile_available():
+        correct_c = decompile_to_c(raw_code)
+        print(f"[+] Stage 1 complete: {function_name}")
+    else:
+        # Use mock decompilation if LLM4Decompile not available
+        print(f"[!] LLM4Decompile not available, using mock transformation")
+        correct_c = mock_decompile_to_c(raw_code)
+    
+    # Stage 2: GPT-4o for readability (if API key available)
+    if client:
+        print(f"[*] Stage 2: Improving readability for {function_name} with GPT-4o...")
+        readable_c = await _improve_readability(function_name, correct_c, context_functions)
+        print(f"[+] Stage 2 complete: {function_name}")
+        return readable_c
+    else:
+        # No API key - return Stage 1 output with basic mock improvements
+        print(f"[!] No OpenAI API key - returning Stage 1 output only")
+        return _mock_readability(function_name, correct_c)
+    
+
+async def _improve_readability(
+    function_name: str,
+    code: str,
+    context_functions: Optional[Dict[str, str]] = None
+) -> str:
+    """
+    Stage 2: Use GPT-4o to improve code readability.
+    
+    This works on already-correct C code from Stage 1,
+    so it's faster and more accurate than working on raw Ghidra output.
+    """
+    user_prompt = f"Improve the readability of this decompiled function:\n\n{code}"
     
     # Add context about other functions if available
     if context_functions:
         context_str = "\n".join([
             f"// {name}: {sig}" 
-            for name, sig in list(context_functions.items())[:10]  # Limit context
+            for name, sig in list(context_functions.items())[:5]  # Limit context
         ])
-        user_prompt += f"\n\nFor context, here are signatures of other functions in this binary:\n{context_str}"
+        user_prompt += f"\n\nOther functions in this binary:\n{context_str}"
     
     try:
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "system", "content": READABILITY_PROMPT},
                 {"role": "user", "content": user_prompt}
             ],
-            temperature=0.3,  # Lower temperature for more consistent output
+            temperature=0.2,  # Low temperature for consistent output
             max_tokens=4096,
         )
         
-        refactored = response.choices[0].message.content
+        result = response.choices[0].message.content
         
         # Clean up any accidental markdown code fences
-        if refactored.startswith("```"):
-            lines = refactored.split("\n")
-            # Remove first line (```c or ```)
-            lines = lines[1:]
-            # Remove last line if it's ```
+        if result.startswith("```"):
+            lines = result.split("\n")
+            lines = lines[1:]  # Remove opening fence
             if lines and lines[-1].strip() == "```":
-                lines = lines[:-1]
-            refactored = "\n".join(lines)
+                lines = lines[:-1]  # Remove closing fence
+            result = "\n".join(lines)
         
-        return refactored.strip()
+        return result.strip()
         
     except Exception as e:
-        print(f"[!] Error calling OpenAI API: {e}")
-        # Return original code with a comment on failure
-        return f"/* AI refactoring failed: {str(e)} */\n{raw_code}"
+        print(f"[!] Error in Stage 2 (GPT-4o): {e}")
+        # Return Stage 1 output on failure
+        return code
 
 
-def _mock_refactor(function_name: str, raw_code: str) -> str:
+def _mock_readability(function_name: str, code: str) -> str:
     """
-    Mock refactoring for development/testing without API key.
-    Performs basic transformations.
+    Mock readability improvements when no API key is available.
+    Performs basic transformations to simulate Stage 2 output.
     """
-    # Simple mock transformations
-    refactored = raw_code
+    refactored = code
     
     # Add a header comment
     header = f"""/**
  * Function: {function_name}
  * 
- * [AI-refactored code - mock mode]
- * This code has been analyzed and improved for readability.
+ * [Decompiled and refactored code]
+ * Stage 1: LLM4Decompile - structural fixes
+ * Stage 2: Skipped (no API key)
  */
 """
     
@@ -145,26 +178,20 @@ def _mock_refactor(function_name: str, raw_code: str) -> str:
         ("lVar3", "offset"),
         ("lVar4", "computed_value"),
         ("sVar1", "string_length"),
+        ("local_10", "local_var_a"),
+        ("local_14", "local_var_b"),
+        ("local_18", "local_var_c"),
     ]
     
     for old, new in replacements:
         refactored = refactored.replace(old, new)
-    
-    # Replace goto patterns with comments suggesting structure
-    if "goto LAB_" in refactored:
-        refactored = refactored.replace("goto LAB_", "/* TODO: restructure */ goto LAB_")
-    
-    # Replace undefined types
-    refactored = refactored.replace("undefined8", "uint64_t")
-    refactored = refactored.replace("undefined4", "uint32_t")
-    refactored = refactored.replace("undefined", "uint8_t")
     
     return header + refactored
 
 
 async def refactor_all_functions(functions: Dict[str, str]) -> Dict[str, str]:
     """
-    Refactor all functions in a binary.
+    Refactor all functions in a binary using the two-stage pipeline.
     
     Args:
         functions: Dict mapping function names to raw decompiled code

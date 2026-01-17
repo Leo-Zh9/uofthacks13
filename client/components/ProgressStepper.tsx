@@ -9,12 +9,12 @@ interface ProgressStepperProps {
   progress: number;
 }
 
-const stages: { key: Stage; label: string; icon: string }[] = [
-  { key: 'uploading', label: 'UPLOADING', icon: '↑' },
-  { key: 'disassembling', label: 'DISASSEMBLING', icon: '⚙' },
-  { key: 'analyzing', label: 'ANALYZING', icon: '◎' },
-  { key: 'ai_refactoring', label: 'AI REFACTORING', icon: '✧' },
-  { key: 'completed', label: 'COMPLETE', icon: '✓' },
+const stages: { key: Stage; label: string; icon: string; description: string }[] = [
+  { key: 'uploading', label: 'UPLOAD', icon: '↑', description: 'Uploading binary' },
+  { key: 'disassembling', label: 'GHIDRA', icon: '⚙', description: 'Disassembling' },
+  { key: 'analyzing', label: 'ANALYZE', icon: '◎', description: 'Analyzing' },
+  { key: 'ai_refactoring', label: 'LLM4D + GPT', icon: '🧠', description: 'AI Pipeline' },
+  { key: 'completed', label: 'DONE', icon: '✓', description: 'Complete' },
 ];
 
 export default function ProgressStepper({ currentStage, progress }: ProgressStepperProps) {
@@ -22,20 +22,26 @@ export default function ProgressStepper({ currentStage, progress }: ProgressStep
   const isFailed = currentStage === 'failed';
 
   return (
-    <div className="w-full max-w-3xl mx-auto">
+    <div className="w-full max-w-4xl mx-auto">
+      {/* Pipeline description */}
+      <div className="text-center mb-6">
+        <p className="text-xs text-[var(--foreground-muted)]">
+          Two-Stage AI Pipeline: <span className="text-[var(--cyan)]">LLM4Decompile</span> (correctness) → <span className="text-[var(--magenta)]">GPT-4o</span> (readability)
+        </p>
+      </div>
+
       {/* Steps */}
       <div className="flex items-center justify-between mb-8">
         {stages.map((stage, index) => {
           const isActive = index === currentIndex;
           const isComplete = index < currentIndex || currentStage === 'completed';
-          const isPending = index > currentIndex;
 
           return (
             <div key={stage.key} className="flex items-center">
               {/* Step circle */}
               <motion.div
                 className={`
-                  relative w-12 h-12 rounded-full flex items-center justify-center
+                  relative w-14 h-14 rounded-full flex items-center justify-center
                   border-2 transition-all duration-300
                   ${isFailed && isActive
                     ? 'border-red-500 bg-red-500/20 text-red-400'
@@ -70,14 +76,14 @@ export default function ProgressStepper({ currentStage, progress }: ProgressStep
                   />
                 )}
                 
-                <span className="relative z-10 text-lg font-bold">
+                <span className="relative z-10 text-xl font-bold">
                   {isFailed && isActive ? '✕' : stage.icon}
                 </span>
               </motion.div>
 
               {/* Connector line */}
               {index < stages.length - 1 && (
-                <div className="w-16 h-0.5 mx-2 bg-gray-700 overflow-hidden">
+                <div className="w-12 md:w-20 h-0.5 mx-1 md:mx-2 bg-gray-700 overflow-hidden">
                   <motion.div
                     className={`h-full ${isComplete ? 'bg-[var(--cyan)]' : 'bg-gray-700'}`}
                     initial={{ width: '0%' }}
@@ -103,7 +109,7 @@ export default function ProgressStepper({ currentStage, progress }: ProgressStep
             <div 
               key={`label-${stage.key}`}
               className={`
-                w-12 text-center text-[10px] font-medium tracking-wider
+                w-14 text-center text-[9px] font-medium tracking-wider
                 ${isFailed && isActive
                   ? 'text-red-400'
                   : isComplete
@@ -124,7 +130,7 @@ export default function ProgressStepper({ currentStage, progress }: ProgressStep
       <div className="mt-8">
         <div className="flex justify-between mb-2">
           <span className="text-sm text-[var(--foreground-muted)]">
-            {isFailed ? 'ERROR' : stages[currentIndex]?.label || 'INITIALIZING'}
+            {isFailed ? 'ERROR' : stages[currentIndex]?.description || 'INITIALIZING'}
           </span>
           <span className={`text-sm font-mono ${isFailed ? 'text-red-400' : 'text-[var(--cyan)]'}`}>
             {progress}%
@@ -138,6 +144,31 @@ export default function ProgressStepper({ currentStage, progress }: ProgressStep
             transition={{ duration: 0.3 }}
           />
         </div>
+
+        {/* Stage details for AI Refactoring */}
+        {currentStage === 'ai_refactoring' && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mt-4 p-3 bg-[var(--background-tertiary)] rounded-lg border border-[var(--magenta)]/30"
+          >
+            <div className="flex items-center gap-3 text-xs">
+              <div className="flex items-center gap-2">
+                <span className="text-[var(--cyan)]">●</span>
+                <span className="text-[var(--foreground-muted)]">Stage 1:</span>
+                <span className="text-[var(--cyan)]">LLM4Decompile</span>
+                <span className="text-[var(--foreground-muted)]">(fixes structure)</span>
+              </div>
+              <span className="text-[var(--foreground-muted)]">→</span>
+              <div className="flex items-center gap-2">
+                <span className="text-[var(--magenta)]">●</span>
+                <span className="text-[var(--foreground-muted)]">Stage 2:</span>
+                <span className="text-[var(--magenta)]">GPT-4o</span>
+                <span className="text-[var(--foreground-muted)]">(adds readability)</span>
+              </div>
+            </div>
+          </motion.div>
+        )}
       </div>
     </div>
   );

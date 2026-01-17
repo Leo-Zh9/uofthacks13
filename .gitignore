@@ -1,0 +1,50 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+*.pyc
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+.env
+
+# Environment variables
+.env
+.env.local
+
+# PyGhidra/Ghidra
+ghidra_projects/
+*.gpr
+*.rep/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+temp/
+
+# Node (for client)
+node_modules/
+.next/
+out/

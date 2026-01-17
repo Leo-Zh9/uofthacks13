@@ -90,14 +90,16 @@ async def process_binary(job_id: str, file_path: str):
         ])
         jobs[job_id]["raw_combined"] = raw_combined
         
-        # Stage 3: AI Refactoring
+        # Stage 3: AI Refactoring (Two-stage pipeline)
         update_job_status(job_id, JobStatus.AI_REFACTORING, "AI refactoring code...", 60)
-        add_log(job_id, "[*] Sending code to AI for refactoring...")
+        add_log(job_id, "[*] Starting two-stage AI pipeline...")
+        add_log(job_id, "[*] Stage 1: LLM4Decompile (correctness)")
+        add_log(job_id, "[*] Stage 2: GPT-4o (readability)")
         
         refactored_functions = {}
         total_functions = len(functions)
         for i, (func_name, func_code) in enumerate(functions.items()):
-            add_log(job_id, f"[*] Refactoring function: {func_name}")
+            add_log(job_id, f"[*] Processing function: {func_name}")
             progress = 60 + int((i / total_functions) * 35)
             update_job_status(job_id, JobStatus.AI_REFACTORING, f"Refactoring {func_name}...", progress)
             
@@ -234,3 +236,50 @@ async def get_job_result(job_id: str):
         refactored_combined=job.get("refactored_combined", ""),
         error=job["error"],
     )
+
+
+@router.post("/warmup")
+async def warmup_model():
+    """
+    Pre-load the LLM4Decompile model to avoid cold start delays.
+    
+    Call this endpoint before your demo to ensure the first upload
+    doesn't have a 1-2 minute model loading delay.
+    """
+    from services.llm_service import get_model, is_available
+    
+    if not is_available():
+        return {
+            "status": "unavailable",
+            "message": "LLM4Decompile dependencies not installed. Install with: pip install torch transformers accelerate bitsandbytes"
+        }
+    
+    try:
+        model, tokenizer = get_model()
+        if model is not None:
+            return {
+                "status": "ready",
+                "message": "LLM4Decompile model loaded and ready"
+            }
+        else:
+            return {
+                "status": "failed",
+                "message": "Failed to load LLM4Decompile model"
+            }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"Error loading model: {str(e)}"
+        }
+
+
+@router.get("/model-status")
+async def get_model_status():
+    """Check the status of the LLM4Decompile model."""
+    from services.llm_service import is_available, _model
+    
+    return {
+        "llm4decompile_available": is_available(),
+        "model_loaded": _model is not None,
+        "openai_configured": bool(os.environ.get("OPENAI_API_KEY")),
+    }
