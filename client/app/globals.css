@@ -1,0 +1,185 @@
+@import "tailwindcss";
+
+:root {
+  /* Cyberpunk color palette */
+  --background: #0a0b14;
+  --background-secondary: #12141f;
+  --background-tertiary: #1a1d2e;
+  --foreground: #e4e4e7;
+  --foreground-muted: #71717a;
+  
+  /* Accent colors */
+  --cyan: #00ffe0;
+  --cyan-glow: rgba(0, 255, 224, 0.3);
+  --magenta: #ff00ff;
+  --magenta-glow: rgba(255, 0, 255, 0.3);
+  --purple: #a855f7;
+  --green: #22c55e;
+  --red: #ef4444;
+  --yellow: #facc15;
+  --orange: #f97316;
+  
+  /* Grid pattern */
+  --grid-color: rgba(0, 255, 224, 0.03);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: 'Orbitron', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--cyan) var(--background-secondary);
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: var(--background-secondary);
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--cyan);
+  border-radius: 4px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--magenta);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: 'Orbitron', sans-serif;
+  min-height: 100vh;
+  background-image: 
+    linear-gradient(var(--grid-color) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
+  background-size: 50px 50px;
+  background-position: -1px -1px;
+}
+
+/* Glow effects */
+.glow-cyan {
+  box-shadow: 0 0 20px var(--cyan-glow), 0 0 40px var(--cyan-glow);
+}
+
+.glow-magenta {
+  box-shadow: 0 0 20px var(--magenta-glow), 0 0 40px var(--magenta-glow);
+}
+
+.text-glow-cyan {
+  text-shadow: 0 0 10px var(--cyan), 0 0 20px var(--cyan-glow);
+}
+
+.text-glow-magenta {
+  text-shadow: 0 0 10px var(--magenta), 0 0 20px var(--magenta-glow);
+}
+
+/* Animated gradient border */
+.gradient-border {
+  position: relative;
+  background: var(--background-secondary);
+  border-radius: 12px;
+}
+
+.gradient-border::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 14px;
+  background: linear-gradient(45deg, var(--cyan), var(--magenta), var(--cyan));
+  background-size: 200% 200%;
+  animation: gradient-shift 3s ease infinite;
+  z-index: -1;
+}
+
+@keyframes gradient-shift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+/* Pulse animation */
+@keyframes pulse-glow {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+/* Terminal typing effect */
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.cursor-blink::after {
+  content: '█';
+  animation: blink 1s step-end infinite;
+  color: var(--cyan);
+}
+
+/* Scanline effect */
+.scanlines::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0.15),
+    rgba(0, 0, 0, 0.15) 1px,
+    transparent 1px,
+    transparent 2px
+  );
+  pointer-events: none;
+}
+
+/* Code block styling */
+.code-block {
+  background: var(--background-secondary);
+  border: 1px solid rgba(0, 255, 224, 0.2);
+  border-radius: 8px;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* Button styles */
+.btn-cyber {
+  background: linear-gradient(135deg, var(--cyan) 0%, var(--magenta) 100%);
+  color: var(--background);
+  font-weight: 600;
+  padding: 12px 24px;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.btn-cyber:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0 30px var(--cyan-glow), 0 0 60px var(--magenta-glow);
+}
+
+.btn-cyber:active {
+  transform: translateY(0);
+}
+
+/* Progress bar */
+.progress-bar {
+  background: var(--background-tertiary);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.progress-bar-fill {
+  background: linear-gradient(90deg, var(--cyan), var(--magenta));
+  height: 100%;
+  transition: width 0.5s ease;
+}

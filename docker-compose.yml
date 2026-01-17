@@ -1,0 +1,62 @@
+version: '3.8'
+
+services:
+  # Frontend - Next.js application
+  frontend:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    depends_on:
+      - backend
+    networks:
+      - app-network
+
+  # Backend - FastAPI server with PyGhidra
+  backend:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - GHIDRA_INSTALL_DIR=/opt/ghidra
+      - GHIDRA_PROJECT_DIR=/tmp/ghidra_projects
+    volumes:
+      # Mount for temporary files only - no persistent storage of binaries
+      - ghidra-temp:/tmp/ghidra_projects
+    # Security: Run with limited capabilities
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    # Security: Read-only root filesystem except for temp directories
+    read_only: true
+    tmpfs:
+      - /tmp:size=512M,mode=1777
+    # Security: No privilege escalation
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - app-network
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+        reservations:
+          cpus: '1'
+          memory: 2G
+
+volumes:
+  ghidra-temp:
+    driver: local
+
+networks:
+  app-network:
+    driver: bridge

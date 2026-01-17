@@ -1,0 +1,236 @@
+import os
+import sys
+import uuid
+import tempfile
+import shutil
+from typing import Dict, List, Any
+from fastapi import APIRouter, UploadFile, File, HTTPException, BackgroundTasks
+
+# Add server directory to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from models.schemas import (
+    JobStatus,
+    JobResponse,
+    JobStatusResponse,
+    JobResultResponse,
+    FunctionCode,
+    UploadResponse,
+)
+
+router = APIRouter(prefix="/api", tags=["decompile"])
+
+# In-memory job store
+jobs: Dict[str, Dict[str, Any]] = {}
+
+# Constants
+MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
+TEMP_DIR = tempfile.mkdtemp(prefix="decompiler_")
+
+# PE magic bytes: MZ
+PE_MAGIC = b"MZ"
+# ELF magic bytes
+ELF_MAGIC = b"\x7fELF"
+
+
+def validate_binary(content: bytes) -> bool:
+    """Validate that the file is a PE or ELF binary."""
+    if content[:2] == PE_MAGIC:
+        return True
+    if content[:4] == ELF_MAGIC:
+        return True
+    return False
+
+
+def add_log(job_id: str, message: str):
+    """Add a log message to a job."""
+    if job_id in jobs:
+        jobs[job_id]["logs"].append(message)
+
+
+def update_job_status(job_id: str, status: JobStatus, stage: str, progress: int):
+    """Update job status."""
+    if job_id in jobs:
+        jobs[job_id]["status"] = status
+        jobs[job_id]["stage"] = stage
+        jobs[job_id]["progress"] = progress
+
+
+async def process_binary(job_id: str, file_path: str):
+    """Background task to process the binary file."""
+    from services.ghidra_service import decompile_binary
+    from services.ai_service import refactor_code
+    
+    try:
+        # Stage 1: Disassembling
+        update_job_status(job_id, JobStatus.DISASSEMBLING, "Disassembling binary...", 10)
+        add_log(job_id, "[*] Starting Ghidra analysis...")
+        add_log(job_id, f"[*] Loading binary: {os.path.basename(file_path)}")
+        
+        # Decompile the binary
+        add_log(job_id, "[*] Initializing decompiler interface...")
+        functions = decompile_binary(file_path, job_id)
+        
+        add_log(job_id, f"[+] Found {len(functions)} functions")
+        for func_name in list(functions.keys())[:10]:  # Log first 10 functions
+            add_log(job_id, f"    - {func_name}")
+        if len(functions) > 10:
+            add_log(job_id, f"    ... and {len(functions) - 10} more")
+        
+        # Stage 2: Analyzing
+        update_job_status(job_id, JobStatus.ANALYZING, "Analyzing control flow...", 40)
+        add_log(job_id, "[*] Analyzing control flow graphs...")
+        add_log(job_id, "[*] Identifying function boundaries...")
+        
+        # Store raw decompiled code
+        jobs[job_id]["raw_functions"] = functions
+        raw_combined = "\n\n".join([
+            f"// Function: {name}\n{code}" 
+            for name, code in functions.items()
+        ])
+        jobs[job_id]["raw_combined"] = raw_combined
+        
+        # Stage 3: AI Refactoring
+        update_job_status(job_id, JobStatus.AI_REFACTORING, "AI refactoring code...", 60)
+        add_log(job_id, "[*] Sending code to AI for refactoring...")
+        
+        refactored_functions = {}
+        total_functions = len(functions)
+        for i, (func_name, func_code) in enumerate(functions.items()):
+            add_log(job_id, f"[*] Refactoring function: {func_name}")
+            progress = 60 + int((i / total_functions) * 35)
+            update_job_status(job_id, JobStatus.AI_REFACTORING, f"Refactoring {func_name}...", progress)
+            
+            # Get context from other functions (signatures)
+            context_funcs = {k: v.split("{")[0] + ";" for k, v in functions.items() if k != func_name}
+            refactored = await refactor_code(func_name, func_code, context_funcs)
+            refactored_functions[func_name] = refactored
+            add_log(job_id, f"[+] Completed: {func_name}")
+        
+        # Store refactored code
+        jobs[job_id]["refactored_functions"] = refactored_functions
+        refactored_combined = "\n\n".join([
+            f"// Function: {name}\n{code}" 
+            for name, code in refactored_functions.items()
+        ])
+        jobs[job_id]["refactored_combined"] = refactored_combined
+        
+        # Stage 4: Complete
+        update_job_status(job_id, JobStatus.COMPLETED, "Completed!", 100)
+        add_log(job_id, "[+] Decompilation and refactoring complete!")
+        add_log(job_id, f"[+] Processed {len(functions)} functions successfully")
+        
+    except Exception as e:
+        jobs[job_id]["status"] = JobStatus.FAILED
+        jobs[job_id]["error"] = str(e)
+        add_log(job_id, f"[!] Error: {str(e)}")
+    finally:
+        # Cleanup temp file
+        if os.path.exists(file_path):
+            os.remove(file_path)
+
+
+@router.post("/upload", response_model=UploadResponse)
+async def upload_binary(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...)
+):
+    """Upload a binary file for decompilation."""
+    # Read file content
+    content = await file.read()
+    
+    # Validate file size
+    if len(content) > MAX_FILE_SIZE:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File too large. Maximum size is {MAX_FILE_SIZE // (1024*1024)}MB"
+        )
+    
+    # Validate file type
+    if not validate_binary(content):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid file type. Only PE (.exe) and ELF binaries are supported."
+        )
+    
+    # Generate job ID
+    job_id = str(uuid.uuid4())
+    
+    # Save file to temp directory
+    file_path = os.path.join(TEMP_DIR, f"{job_id}_{file.filename}")
+    with open(file_path, "wb") as f:
+        f.write(content)
+    
+    # Initialize job
+    jobs[job_id] = {
+        "status": JobStatus.PENDING,
+        "stage": "Queued",
+        "progress": 0,
+        "logs": [f"[*] File received: {file.filename}", f"[*] Size: {len(content)} bytes"],
+        "file_path": file_path,
+        "raw_functions": {},
+        "refactored_functions": {},
+        "raw_combined": "",
+        "refactored_combined": "",
+        "error": None,
+    }
+    
+    # Start background processing
+    background_tasks.add_task(process_binary, job_id, file_path)
+    
+    return UploadResponse(
+        job_id=job_id,
+        message="File uploaded successfully. Processing started."
+    )
+
+
+@router.get("/job/{job_id}", response_model=JobStatusResponse)
+async def get_job_status(job_id: str):
+    """Get the status of a decompilation job."""
+    if job_id not in jobs:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    job = jobs[job_id]
+    return JobStatusResponse(
+        job_id=job_id,
+        status=job["status"],
+        stage=job["stage"],
+        progress=job["progress"],
+        logs=job["logs"],
+        error=job["error"],
+    )
+
+
+@router.get("/job/{job_id}/result", response_model=JobResultResponse)
+async def get_job_result(job_id: str):
+    """Get the result of a completed decompilation job."""
+    if job_id not in jobs:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    job = jobs[job_id]
+    
+    if job["status"] not in [JobStatus.COMPLETED, JobStatus.FAILED]:
+        raise HTTPException(
+            status_code=400,
+            detail="Job is still processing. Please wait for completion."
+        )
+    
+    functions = []
+    raw_funcs = job.get("raw_functions", {})
+    refactored_funcs = job.get("refactored_functions", {})
+    
+    for name, raw_code in raw_funcs.items():
+        functions.append(FunctionCode(
+            name=name,
+            raw_code=raw_code,
+            refactored_code=refactored_funcs.get(name),
+        ))
+    
+    return JobResultResponse(
+        job_id=job_id,
+        status=job["status"],
+        functions=functions,
+        raw_combined=job.get("raw_combined", ""),
+        refactored_combined=job.get("refactored_combined", ""),
+        error=job["error"],
+    )
