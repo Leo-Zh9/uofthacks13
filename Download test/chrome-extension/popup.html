@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Download Monitor</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <h1>📥 Download Monitor</h1>
+    
+    <div class="section">
+      <h2>🚫 Blocked (Malware)</h2>
+      <div id="blockedList">
+        <p class="no-downloads">No blocked files</p>
+      </div>
+      <button id="clearBlockedBtn" class="danger-btn">Clear Blocked</button>
+    </div>
+    
+    <div class="section">
+      <h2>📦 Large Files (&gt;10MB)</h2>
+      <div id="downloadsList">
+        <p class="no-downloads">No large files detected yet</p>
+      </div>
+      <button id="clearBtn">Clear History</button>
+    </div>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>
