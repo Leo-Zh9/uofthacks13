@@ -48,10 +48,25 @@ LIBRARY_FUNCTIONS: Set[str] = {
     "__GSHandlerCheck", "__CxxFrameHandler3", "__CxxFrameHandler4",
     "_initterm", "_initterm_e", "__acrt_iob_func",
     "_cexit", "_c_exit", "_exit", "__p___argc", "__p___argv",
-    # Compiler-generated
+    # Compiler-generated / linker stubs
     "_start", "__libc_start_main", "__gmon_start__",
     "__cxa_atexit", "__cxa_finalize",
     "_fini", "_init",
+    # MinGW CRT (C Runtime) functions - NOT user code!
+    "WinMainCRTStartup", "mainCRTStartup", "wmainCRTStartup", "wWinMainCRTStartup",
+    "__tmainCRTStartup", "__wgetmainargs", "__getmainargs",
+    "__main", "__do_global_dtors", "__do_global_ctors",
+    "atexit", "__gcc_register_frame", "__gcc_deregister_frame",
+    "mark_section_writable", "restore_modified_sections",
+    "mingw_set_invalid_parameter_handler", "mingw_get_invalid_parameter_handler",
+    "_matherr", "mingw_matherr", "__mingw_raise_matherr",
+    "__mingw_GetSectionForAddress", "__mingw_GetSectionCount",
+    "_pei386_runtime_relocator", "__mingw_init_ehandler",
+    "_gnu_exception_handler", "__mingwInitEhandler",
+    # GCC exception handling
+    "_Unwind_Resume", "_Unwind_RaiseException", "_Unwind_GetIP",
+    "__gxx_personality_v0", "__cxa_begin_catch", "__cxa_end_catch",
+    "__cxa_throw", "__cxa_rethrow", "__cxa_allocate_exception",
 }
 
 # Only try to use PyGhidra if GHIDRA_INSTALL_DIR is set
@@ -94,27 +109,83 @@ def is_user_function(func, func_name: str) -> bool:
     Determine if a function is likely written by the developer (not a library function).
     
     Returns True for user functions, False for library/runtime functions.
+    
+    Environment variables:
+    - SKIP_FUN_FUNCTIONS: Set to "true" to skip ALL FUN_* functions (faster for demos)
+    - MIN_FUNCTION_SIZE: Minimum bytes for FUN_* functions (default 50)
     """
+    # ALWAYS keep main, _main, wmain, WinMain - these are user entry points!
+    priority_names = ["main", "_main", "wmain", "_wmain", "winmain", "_winmain", "wwinmain"]
+    if func_name.lower() in priority_names:
+        return True
+    
     # Skip external and thunk functions
     if func.isExternal() or func.isThunk():
+        return False
+    
+    # Optional: Skip ALL FUN_* functions for faster processing
+    skip_all_fun = os.environ.get("SKIP_FUN_FUNCTIONS", "").lower() in ("true", "1", "yes")
+    if skip_all_fun and func_name.startswith("FUN_"):
         return False
     
     # Skip known library function names
     if func_name.lower() in {f.lower() for f in LIBRARY_FUNCTIONS}:
         return False
     
-    # Skip MSVC runtime functions (start with __scrt_, __acrt_, __vcrt_, etc.)
+    # Skip runtime functions by prefix patterns
     runtime_prefixes = [
+        # MSVC runtime
         "__scrt_", "__acrt_", "__vcrt_", "__std_", "__crt_",
         "_CRT_", "_RTC_", "__security_", "__report_", "__raise_",
         "FID_conflict:", "_guard_", "__GSHandler", "__CxxFrame",
+        # MinGW runtime
+        "__mingw_", "_mingw_", "mingw_", "__gnu_",
+        "__do_global_", "__gcc_", "_Unwind_", "__gxx_",
+        "__cxa_", "_pei386_",
+        # GCC internals
+        "__register_frame", "__deregister_frame",
     ]
     for prefix in runtime_prefixes:
         if func_name.startswith(prefix):
             return False
     
+    # Skip CRT entry points (case-insensitive patterns)
+    crt_patterns = [
+        "crtStartup", "CRTStartup", "mainCRT", "WinMainCRT",
+        "tmainCRT", "wmainCRT", "dllmain", "DllMain",
+    ]
+    func_lower = func_name.lower()
+    for pattern in crt_patterns:
+        if pattern.lower() in func_lower:
+            return False
+    
     # Skip functions starting with double underscore (compiler-generated)
     if func_name.startswith("__"):
+        return False
+    
+    # Skip C++ STL / standard library template instantiations
+    stl_patterns = [
+        "std::", "operator", "basic_string", "basic_ostream", "basic_istream",
+        "basic_ios", "basic_streambuf", "basic_filebuf", "basic_fstream",
+        "allocator<", "vector<", "list<", "map<", "set<", "unordered_",
+        "unique_ptr<", "shared_ptr<", "weak_ptr<", "make_unique", "make_shared",
+        "pair<", "tuple<", "optional<", "variant<", "any<",
+        "iterator<", "reverse_iterator", "back_insert_iterator",
+        "char_traits<", "collate<", "ctype<", "codecvt<",
+        "numpunct<", "moneypunct<", "time_get<", "time_put<",
+        "messages<", "money_get<", "money_put<", "num_get<", "num_put<",
+        "_Tidy_guard<", "_Alloc_", "_String_", "_Vector_", "_Tree_",
+        "locale::", "facet::", "ios_base::", "streambuf::",
+        # MSVC STL internals
+        "_Narrow_char_traits", "_Char_traits_base", "_String_alloc",
+        "_Compressed_pair", "_Vector_alloc", "_List_alloc",
+    ]
+    for pattern in stl_patterns:
+        if pattern in func_name:
+            return False
+    
+    # Skip C++ destructors and constructors (usually not interesting)
+    if func_name.startswith("~") or func_name.endswith("::~"):
         return False
     
     # Skip functions starting with single underscore (usually compiler-generated)
@@ -124,14 +195,15 @@ def is_user_function(func, func_name: str) -> bool:
         if func_name.lower() not in keep_names:
             return False
     
-    # Skip FUN_ functions that are very short (likely stubs)
+    # Skip FUN_ functions that are very short (likely stubs/library code)
     body = func.getBody()
     if body:
         num_addrs = body.getNumAddresses()
-        # For FUN_* functions, require at least 20 instructions
-        if func_name.startswith("FUN_") and num_addrs < 20:
+        # For FUN_* functions, require minimum size (default 50 bytes, configurable)
+        min_fun_size = int(os.environ.get("MIN_FUNCTION_SIZE", "50"))
+        if func_name.startswith("FUN_") and num_addrs < min_fun_size:
             return False
-        # For named functions, require at least 10 instructions
+        # For named functions, require at least 10 bytes
         elif num_addrs < 10:
             return False
     
