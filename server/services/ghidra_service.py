@@ -109,9 +109,18 @@ def is_user_function(func, func_name: str) -> bool:
     Determine if a function is likely written by the developer (not a library function).
     
     Returns True for user functions, False for library/runtime functions.
+    
+    Environment variables:
+    - SKIP_FUN_FUNCTIONS: Set to "true" to skip ALL FUN_* functions (faster for demos)
+    - MIN_FUNCTION_SIZE: Minimum bytes for FUN_* functions (default 50)
     """
     # Skip external and thunk functions
     if func.isExternal() or func.isThunk():
+        return False
+    
+    # Optional: Skip ALL FUN_* functions for faster processing
+    skip_all_fun = os.environ.get("SKIP_FUN_FUNCTIONS", "").lower() in ("true", "1", "yes")
+    if skip_all_fun and func_name.startswith("FUN_"):
         return False
     
     # Skip known library function names
@@ -149,6 +158,31 @@ def is_user_function(func, func_name: str) -> bool:
     if func_name.startswith("__"):
         return False
     
+    # Skip C++ STL / standard library template instantiations
+    stl_patterns = [
+        "std::", "operator", "basic_string", "basic_ostream", "basic_istream",
+        "basic_ios", "basic_streambuf", "basic_filebuf", "basic_fstream",
+        "allocator<", "vector<", "list<", "map<", "set<", "unordered_",
+        "unique_ptr<", "shared_ptr<", "weak_ptr<", "make_unique", "make_shared",
+        "pair<", "tuple<", "optional<", "variant<", "any<",
+        "iterator<", "reverse_iterator", "back_insert_iterator",
+        "char_traits<", "collate<", "ctype<", "codecvt<",
+        "numpunct<", "moneypunct<", "time_get<", "time_put<",
+        "messages<", "money_get<", "money_put<", "num_get<", "num_put<",
+        "_Tidy_guard<", "_Alloc_", "_String_", "_Vector_", "_Tree_",
+        "locale::", "facet::", "ios_base::", "streambuf::",
+        # MSVC STL internals
+        "_Narrow_char_traits", "_Char_traits_base", "_String_alloc",
+        "_Compressed_pair", "_Vector_alloc", "_List_alloc",
+    ]
+    for pattern in stl_patterns:
+        if pattern in func_name:
+            return False
+    
+    # Skip C++ destructors and constructors (usually not interesting)
+    if func_name.startswith("~") or func_name.endswith("::~"):
+        return False
+    
     # Skip functions starting with single underscore (usually compiler-generated)
     # But keep _main, _WinMain, _start
     if func_name.startswith("_"):
@@ -156,14 +190,15 @@ def is_user_function(func, func_name: str) -> bool:
         if func_name.lower() not in keep_names:
             return False
     
-    # Skip FUN_ functions that are very short (likely stubs)
+    # Skip FUN_ functions that are very short (likely stubs/library code)
     body = func.getBody()
     if body:
         num_addrs = body.getNumAddresses()
-        # For FUN_* functions, require at least 20 instructions
-        if func_name.startswith("FUN_") and num_addrs < 20:
+        # For FUN_* functions, require minimum size (default 50 bytes, configurable)
+        min_fun_size = int(os.environ.get("MIN_FUNCTION_SIZE", "50"))
+        if func_name.startswith("FUN_") and num_addrs < min_fun_size:
             return False
-        # For named functions, require at least 10 instructions
+        # For named functions, require at least 10 bytes
         elif num_addrs < 10:
             return False
     
