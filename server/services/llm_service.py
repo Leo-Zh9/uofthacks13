@@ -196,12 +196,9 @@ def decompile_to_c(ghidra_pseudo_c: str) -> str:
         with torch.no_grad():
             outputs = model.generate(
                 **inputs,
-                max_new_tokens=1024,  # Reduced to prevent long loops
-                do_sample=True,  # Enable sampling to avoid repetition
-                temperature=0.8,  # Low temp for consistency but not greedy
-                top_p=0.95,  # Nucleus sampling
-                repetition_penalty=1.15,  # Penalize repeated tokens
-                no_repeat_ngram_size=4,  # Prevent 4-gram repetition
+                max_new_tokens=2048,
+                do_sample=False,  # Greedy decoding - model is trained for this
+                repetition_penalty=1.05,  # Mild penalty to reduce loops
                 pad_token_id=tokenizer.eos_token_id,
                 eos_token_id=tokenizer.eos_token_id,
             )
@@ -217,6 +214,12 @@ def decompile_to_c(ghidra_pseudo_c: str) -> str:
         
         # Post-process to fix formatting (LLM sometimes outputs minified code)
         formatted = _format_c_code(result.strip())
+        
+        # Sanity check: detect garbled/hallucinated output
+        if _is_garbled_output(formatted):
+            print("[!] LLM output appears garbled, returning original Ghidra code")
+            return ghidra_pseudo_c
+        
         return formatted
         
     except Exception as e:
@@ -224,6 +227,56 @@ def decompile_to_c(ghidra_pseudo_c: str) -> str:
         import traceback
         traceback.print_exc()
         return ghidra_pseudo_c
+
+
+def _is_garbled_output(code: str) -> bool:
+    """
+    Detect if LLM output is garbled/hallucinated garbage.
+    Returns True if the output looks broken.
+    """
+    if not code or len(code) < 10:
+        return True
+    
+    # Check for excessive special characters (sign of hallucination)
+    special_chars = sum(1 for c in code if c in '@\\^`~|')
+    if special_chars > len(code) * 0.05:  # More than 5% special chars
+        return True
+    
+    # Check for broken escape sequences or garbage patterns
+    garbage_patterns = [
+        '\\x',  # Hex escapes in non-string context
+        '@ptrfun',  # Hallucinated syntax
+        '@ptrcast',
+        '@VERSIONSTRING',
+        '/scratch/',  # Hallucinated file paths
+        '\\uFFFD',  # Unicode replacement char
+        '!!!',  # Triple exclamation (nonsense)
+        '???',  # Triple question (nonsense)
+        '([[[',  # Malformed brackets
+        ']]])',
+        '{{{{',  # Excessive braces
+        '}}}}',
+    ]
+    
+    code_lower = code.lower()
+    for pattern in garbage_patterns:
+        if pattern.lower() in code_lower:
+            print(f"[!] Detected garbage pattern: {pattern}")
+            return True
+    
+    # Check for extremely long lines (sign of broken formatting)
+    for line in code.split('\n'):
+        if len(line) > 500:  # No reasonable C line is this long
+            return True
+    
+    # Check for balanced braces (basic syntax check)
+    open_braces = code.count('{')
+    close_braces = code.count('}')
+    if open_braces > 0 and abs(open_braces - close_braces) > open_braces * 0.5:
+        # More than 50% imbalance suggests broken code
+        return True
+    
+    return False
 
 
 def _detect_and_truncate_repetition(code: str) -> str:
@@ -235,30 +288,52 @@ def _detect_and_truncate_repetition(code: str) -> str:
     if len(lines) < 10:
         return code
     
-    # Look for repeated line patterns
-    seen_lines = {}
+    # Strategy 1: Look for repeated line patterns (same line > 3 times in a row)
+    consecutive_repeats = 0
+    last_line = None
     truncate_at = None
-    repeat_count = 0
     
     for i, line in enumerate(lines):
         stripped = line.strip()
-        if not stripped or stripped in ('{', '}', ''):
+        if not stripped:
             continue
         
-        if stripped in seen_lines:
-            seen_lines[stripped] += 1
-            if seen_lines[stripped] > 3:  # Same line appears more than 3 times
-                repeat_count += 1
-                if repeat_count > 5:  # Multiple repeated lines = loop detected
-                    truncate_at = i - 10  # Go back a bit before the loop started
-                    break
+        if stripped == last_line:
+            consecutive_repeats += 1
+            if consecutive_repeats >= 3:
+                # Found repetition loop, find where it started
+                truncate_at = i - consecutive_repeats
+                break
         else:
-            seen_lines[stripped] = 1
-            repeat_count = 0  # Reset counter when we see new content
+            consecutive_repeats = 0
+            last_line = stripped
     
-    if truncate_at and truncate_at > 10:
+    # Strategy 2: Look for total frequency (same meaningful line appears many times)
+    if truncate_at is None:
+        seen_lines = {}
+        for i, line in enumerate(lines):
+            stripped = line.strip()
+            # Skip common structural elements
+            if not stripped or stripped in ('{', '}', ';', 'return;', 'break;'):
+                continue
+            if len(stripped) < 15:  # Skip short lines
+                continue
+            
+            if stripped in seen_lines:
+                seen_lines[stripped].append(i)
+                if len(seen_lines[stripped]) >= 4:  # 4+ occurrences
+                    # Truncate at first occurrence
+                    truncate_at = seen_lines[stripped][1]
+                    break
+            else:
+                seen_lines[stripped] = [i]
+    
+    if truncate_at and truncate_at > 5:
         truncated = '\n'.join(lines[:truncate_at])
-        return truncated + '\n    // ... (output truncated due to repetition)\n}'
+        # Try to close the function properly
+        if truncated.count('{') > truncated.count('}'):
+            truncated += '\n    // ... (output truncated - repetition detected)\n}'
+        return truncated
     
     return code
 
