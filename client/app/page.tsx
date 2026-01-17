@@ -44,10 +44,7 @@ export default function Home() {
       }
     };
 
-    // Initial poll
     pollStatus();
-
-    // Set up interval
     const interval = setInterval(pollStatus, 2000);
     return () => clearInterval(interval);
   }, [jobId, appState]);
@@ -57,7 +54,11 @@ export default function Home() {
     setAppState('processing');
     setStage('uploading');
     setProgress(5);
-    setLogs([`[*] Selected file: ${file.name}`, `[*] Size: ${(file.size / 1024).toFixed(2)} KB`]);
+    setLogs([
+      `[+] Selected file: ${file.name}`,
+      `[+] Size: ${(file.size / 1024).toFixed(2)} KB`,
+      `[*] Uploading...`
+    ]);
     setError(null);
     setResult(null);
 
@@ -84,21 +85,23 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-screen flex flex-col">
+    <main className="min-h-screen flex flex-col bg-[var(--background)] relative z-10">
       {/* Header */}
-      <header className="border-b border-[var(--cyan)]/20 bg-[var(--background-secondary)]/50 backdrop-blur-sm">
+      <header className="border-b border-[var(--border)] bg-[var(--background-secondary)]/80 backdrop-blur-sm sticky top-0 z-50">
         <div className="container mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-[var(--cyan)] to-[var(--magenta)] flex items-center justify-center">
-                <span className="text-xl">⚙</span>
+              <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-[var(--primary)] to-[var(--accent)] flex items-center justify-center shadow-lg shadow-[var(--primary)]/20">
+                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                </svg>
               </div>
               <div>
-                <h1 className="text-xl font-bold tracking-wider text-glow-cyan">
-                  DECOMPILER
+                <h1 className="text-lg font-semibold text-[var(--foreground)] tracking-tight">
+                  Decompiler
                 </h1>
-                <p className="text-[10px] text-[var(--foreground-muted)] tracking-widest">
-                  AI-POWERED BINARY ANALYSIS
+                <p className="text-xs text-[var(--foreground-muted)] font-mono">
+                  AI-Powered Binary Analysis
                 </p>
               </div>
             </div>
@@ -106,10 +109,9 @@ export default function Home() {
             {appState !== 'idle' && (
               <button
                 onClick={handleReset}
-                className="px-4 py-2 text-sm border border-[var(--cyan)]/50 rounded-lg
-                         text-[var(--cyan)] hover:bg-[var(--cyan)]/10 transition-colors"
+                className="btn-outline text-sm"
               >
-                NEW ANALYSIS
+                New Analysis
               </button>
             )}
           </div>
@@ -117,7 +119,7 @@ export default function Home() {
       </header>
 
       {/* Main content */}
-      <div className="flex-1 container mx-auto px-6 py-8">
+      <div className="flex-1 container mx-auto px-6 py-12 max-w-4xl relative z-10">
         <AnimatePresence mode="wait">
           {/* Idle state - Show upload */}
           {appState === 'idle' && (
@@ -126,25 +128,24 @@ export default function Home() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              className="flex flex-col items-center justify-center min-h-[60vh] gap-8"
+              className="flex flex-col items-center gap-12"
             >
-              <div className="text-center mb-8">
+              <div className="text-center space-y-4">
                 <motion.h2 
-                  className="text-4xl font-bold mb-4 bg-gradient-to-r from-[var(--cyan)] to-[var(--magenta)] bg-clip-text text-transparent"
-                  initial={{ opacity: 0, y: -20 }}
+                  className="text-5xl font-semibold text-[var(--foreground)] tracking-tight"
+                  initial={{ opacity: 0, y: -10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.2 }}
+                  transition={{ delay: 0.1 }}
                 >
-                  REVERSE ENGINEER ANY BINARY
+                  Analyze Binary Files
                 </motion.h2>
                 <motion.p 
-                  className="text-[var(--foreground-muted)] max-w-lg mx-auto"
+                  className="text-lg text-[var(--foreground-muted)] max-w-xl mx-auto"
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  transition={{ delay: 0.4 }}
+                  transition={{ delay: 0.2 }}
                 >
-                  Upload your executable and watch as our AI transforms cryptic assembly 
-                  into clean, readable C code with meaningful variable names and comments.
+                  Upload your executable and transform cryptic assembly into clean, readable C code
                 </motion.p>
               </div>
 
@@ -152,19 +153,18 @@ export default function Home() {
 
               {/* Feature highlights */}
               <motion.div 
-                className="grid grid-cols-3 gap-8 mt-12 max-w-3xl"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.6 }}
+                className="grid grid-cols-1 md:grid-cols-3 gap-8 w-full mt-8"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4 }}
               >
                 {[
-                  { icon: '⚡', title: 'GHIDRA POWERED', desc: 'Industry-standard decompilation engine' },
-                  { icon: '🧠', title: 'AI REFACTORING', desc: 'GPT-4o transforms cryptic code into readable C' },
-                  { icon: '🔒', title: 'SECURE', desc: 'Your binaries are never stored or shared' },
+                  { title: 'Ghidra Engine', desc: 'Industry-standard decompilation' },
+                  { title: 'AI Refactoring', desc: 'Gemini transforms code for readability' },
+                  { title: 'Secure', desc: 'Binaries analyzed in isolation' },
                 ].map((feature, i) => (
-                  <div key={i} className="text-center">
-                    <div className="text-3xl mb-2">{feature.icon}</div>
-                    <h3 className="text-sm font-semibold text-[var(--cyan)] mb-1">{feature.title}</h3>
+                  <div key={i} className="text-center space-y-2">
+                    <h3 className="text-sm font-medium text-[var(--foreground)]">{feature.title}</h3>
                     <p className="text-xs text-[var(--foreground-muted)]">{feature.desc}</p>
                   </div>
                 ))}
@@ -181,6 +181,15 @@ export default function Home() {
               exit={{ opacity: 0, y: -20 }}
               className="flex flex-col gap-8"
             >
+              <div className="text-center">
+                <h2 className="text-2xl font-semibold text-[var(--foreground)] mb-2">
+                  {appState === 'error' ? 'Analysis Failed' : 'Analyzing Binary'}
+                </h2>
+                <p className="text-[var(--foreground-muted)]">
+                  {appState === 'error' ? 'An error occurred during analysis' : 'Please wait while we process your file'}
+                </p>
+              </div>
+              
               <ProgressStepper currentStage={stage} progress={progress} />
               <ConsoleStream logs={logs} isActive={appState === 'processing'} />
               
@@ -188,14 +197,13 @@ export default function Home() {
                 <motion.div
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  className="max-w-3xl mx-auto p-6 bg-red-500/10 border border-red-500/50 rounded-lg"
+                  className="p-6 bg-red-950/30 border border-red-800/50 rounded-lg"
                 >
-                  <h3 className="text-red-400 font-semibold mb-2">Analysis Failed</h3>
-                  <p className="text-red-300/80 text-sm">{error}</p>
+                  <h3 className="text-red-400 font-medium mb-2">Error</h3>
+                  <p className="text-red-300 text-sm mb-4">{error}</p>
                   <button
                     onClick={handleReset}
-                    className="mt-4 px-4 py-2 bg-red-500/20 border border-red-500/50 rounded
-                             text-red-400 hover:bg-red-500/30 transition-colors text-sm"
+                    className="btn-primary bg-red-600 hover:bg-red-700"
                   >
                     Try Again
                   </button>
@@ -215,17 +223,19 @@ export default function Home() {
             >
               {/* Success banner */}
               <motion.div
-                initial={{ opacity: 0, y: -20 }}
+                initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="mb-6 p-4 bg-[var(--green)]/10 border border-[var(--green)]/50 rounded-lg flex items-center gap-4"
+                className="mb-6 p-4 bg-green-950/30 border border-green-800/50 rounded-lg flex items-center gap-4"
               >
-                <div className="w-10 h-10 rounded-full bg-[var(--green)]/20 flex items-center justify-center">
-                  <span className="text-[var(--green)] text-xl">✓</span>
+                <div className="w-10 h-10 rounded-full bg-green-900/50 flex items-center justify-center">
+                  <svg className="w-6 h-6 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
                 </div>
                 <div>
-                  <h3 className="text-[var(--green)] font-semibold">Analysis Complete!</h3>
-                  <p className="text-[var(--foreground-muted)] text-sm">
-                    AI-processed {result.functions.filter(f => f.refactored_code).length} of {result.functions.length} functions
+                  <h3 className="text-green-400 font-medium">Analysis Complete</h3>
+                  <p className="text-green-300 text-sm">
+                    Successfully processed {result.functions.length} functions
                   </p>
                 </div>
               </motion.div>
@@ -245,11 +255,12 @@ export default function Home() {
       </div>
 
       {/* Footer */}
-      <footer className="border-t border-[var(--cyan)]/10 py-4 text-center text-xs text-[var(--foreground-muted)]">
-        <p>
-          Built for <span className="text-[var(--cyan)]">UofTHacks</span> // 
-          Powered by <span className="text-[var(--magenta)]">Ghidra</span> + <span className="text-[var(--cyan)]">GPT-4o</span>
-        </p>
+      <footer className="border-t border-[var(--border)] py-4 mt-auto relative z-10">
+        <div className="container mx-auto px-6 text-center">
+          <p className="text-xs text-[var(--foreground-muted)] font-mono">
+            Powered by Ghidra + Gemini AI • Built for UofTHacks 13
+          </p>
+        </div>
       </footer>
     </main>
   );
