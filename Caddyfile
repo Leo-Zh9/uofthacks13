@@ -1,0 +1,14 @@
+4lias.tech, www.4lias.tech {
+    # API routes - proxy to backend
+    handle /api/* {
+        uri strip_prefix /api
+        reverse_proxy backend:8000
+    }
+
+    # Everything else - proxy to frontend
+    handle {
+        reverse_proxy frontend:3000
+    }
+
+    encode gzip zstd
+}

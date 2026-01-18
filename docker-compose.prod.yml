@@ -1,0 +1,72 @@
+services:
+  # Caddy - Reverse proxy with automatic HTTPS
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - app-network
+    restart: unless-stopped
+    depends_on:
+      - frontend
+      - backend
+
+  # Frontend - Next.js application
+  frontend:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+      args:
+        - NEXT_PUBLIC_API_URL=https://4lias.tech/api
+    environment:
+      - NEXT_PUBLIC_API_URL=https://4lias.tech/api
+    depends_on:
+      - backend
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  # Backend - FastAPI server with PyGhidra
+  backend:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    env_file:
+      - ./server/.env
+    environment:
+      - GHIDRA_INSTALL_DIR=/opt/ghidra
+      - GHIDRA_PROJECT_DIR=/tmp/ghidra_projects
+      - MAX_FUNCTIONS=5
+    volumes:
+      - ghidra-temp:/tmp/ghidra_projects
+    tmpfs:
+      - /tmp:size=1G,mode=1777
+    networks:
+      - app-network
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 8G
+        reservations:
+          cpus: '2'
+          memory: 4G
+    restart: unless-stopped
+
+volumes:
+  ghidra-temp:
+    driver: local
+  caddy_data:
+    driver: local
+  caddy_config:
+    driver: local
+
+networks:
+  app-network:
+    driver: bridge
