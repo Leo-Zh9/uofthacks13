@@ -147,7 +147,7 @@ function HomeContent() {
               </div>
               <div>
                 <h1 className="text-lg font-semibold text-[var(--foreground)] tracking-tight">
-                  Decompiler
+                  Alias
                 </h1>
                 <p className="text-xs text-[var(--foreground-muted)] font-mono">
                   AI-Powered Binary Analysis
@@ -326,7 +326,7 @@ function HomeContent() {
       <footer className="border-t border-[var(--border)] py-4 mt-auto relative z-10">
         <div className="container mx-auto px-6 text-center">
           <p className="text-xs text-[var(--foreground-muted)] font-mono">
-            Powered by Ghidra + Gemini AI • Built for UofTHacks 13
+            Alias • Powered by Ghidra + Gemini AI
           </p>
         </div>
       </footer>

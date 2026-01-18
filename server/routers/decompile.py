@@ -378,3 +378,76 @@ async def cleanup_code(request: dict):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Cleanup failed: {str(e)}")
+
+
+@router.post("/analyze-malware")
+async def analyze_malware(request: dict):
+    """
+    Analyze decompiled code for malware indicators using Gemini Flash.
+    
+    This endpoint examines the combined decompiled code and looks for
+    malicious patterns like keyloggers, backdoors, ransomware, etc.
+    """
+    from services.gemini_service import analyze_for_malware_async, is_available
+    
+    if not is_available():
+        raise HTTPException(
+            status_code=503,
+            detail="Gemini API not configured. Set GEMINI_API_KEY environment variable."
+        )
+    
+    code = request.get("code", "")
+    
+    if not code:
+        raise HTTPException(status_code=400, detail="No code provided")
+    
+    try:
+        result = await analyze_for_malware_async(code)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Malware analysis failed: {str(e)}")
+
+
+@router.get("/job/{job_id}/malware-analysis")
+async def get_job_malware_analysis(job_id: str):
+    """
+    Analyze a completed job's code for malware indicators.
+    
+    This runs Gemini Flash analysis on the combined refactored code
+    from a completed job.
+    """
+    from services.gemini_service import analyze_for_malware_async, is_available
+    
+    if job_id not in jobs:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    job = jobs[job_id]
+    
+    if job["status"] != JobStatus.COMPLETED:
+        raise HTTPException(
+            status_code=400,
+            detail="Job must be completed before malware analysis"
+        )
+    
+    if not is_available():
+        raise HTTPException(
+            status_code=503,
+            detail="Gemini API not configured. Set GEMINI_API_KEY environment variable."
+        )
+    
+    # Get the combined refactored code
+    combined_code = job.get("refactored_combined", "")
+    if not combined_code:
+        combined_code = job.get("raw_combined", "")
+    
+    if not combined_code:
+        raise HTTPException(status_code=400, detail="No code available for analysis")
+    
+    try:
+        result = await analyze_for_malware_async(combined_code)
+        return {
+            "job_id": job_id,
+            "analysis": result
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Malware analysis failed: {str(e)}")

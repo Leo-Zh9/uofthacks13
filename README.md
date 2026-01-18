@@ -1,16 +1,17 @@
-# DECOMPILER - AI-Powered Binary Analysis
+# Alias - AI-Powered Binary Analysis
 
-Transform executables into readable C code using Ghidra and GPT-4o.
+Transform executables into readable C code using Ghidra and Gemini AI.
 
 Built for **UofTHacks 13**.
 
-![Decompiler Demo](https://via.placeholder.com/800x400?text=DECOMPILER+Demo)
+![Alias Demo](https://via.placeholder.com/800x400?text=Alias+Demo)
 
 ## Features
 
 - **Drag-and-Drop Upload**: Simply drag your `.exe` or ELF binary onto the page
+- **Chrome Extension**: Automatically intercepts downloaded executables for analysis
 - **Real-time Progress**: Watch the decompilation process with live console output
-- **AI Refactoring**: GPT-4o transforms cryptic decompiled code into readable C
+- **Two-Pass AI Refactoring**: Gemini 3 Pro fixes logic, Gemini Flash improves readability
 - **Split View Comparison**: See the raw vs. refactored code side-by-side
 - **Export**: Download the clean, refactored code as a `.c` file
 
@@ -19,7 +20,7 @@ Built for **UofTHacks 13**.
 - **Frontend**: Next.js 14, TailwindCSS, Monaco Editor, Framer Motion
 - **Backend**: Python FastAPI
 - **Decompiler**: PyGhidra (Ghidra's Python bindings)
-- **AI**: OpenAI GPT-4o
+- **AI**: Google Gemini 3 Pro + Gemini Flash (two-pass refactoring)
 
 ## Quick Start
 
@@ -41,7 +42,7 @@ cd uofthacks13
 2. Set up environment variables:
 ```bash
 # Create .env file in server directory
-echo "OPENAI_API_KEY=your-api-key-here" > server/.env
+echo "GEMINI_API_KEY=your-gemini-api-key-here" > server/.env
 echo "GHIDRA_INSTALL_DIR=/path/to/ghidra" >> server/.env
 ```
 
@@ -80,8 +81,8 @@ Visit `http://localhost:3000` in your browser.
 For production deployment with sandboxed binary analysis:
 
 ```bash
-# Set your OpenAI API key
-export OPENAI_API_KEY=your-api-key-here
+# Set your Gemini API key
+export GEMINI_API_KEY=your-gemini-api-key-here
 
 # Build and run with Docker Compose
 docker-compose up --build
@@ -134,11 +135,10 @@ uofthacks13/
 
 1. **Upload**: User uploads a PE (.exe) or ELF binary
 2. **Analyze**: PyGhidra loads and auto-analyzes the binary
-3. **Decompile**: Each function is decompiled to pseudo-C
-4. **Refactor**: GPT-4o processes each function:
-   - Renames cryptic variables (iVar1 → counter)
-   - Converts goto spaghetti to proper loops
-   - Adds explanatory comments
+3. **Decompile**: Each user-written function is decompiled to pseudo-C (library functions are filtered out)
+4. **Refactor (Two-Pass)**:
+   - **Pass 1 (Gemini 3 Pro)**: Fixes control flow, reconstructs data structures, corrects logic
+   - **Pass 2 (Gemini Flash)**: Renames variables, improves readability, adds comments
 5. **Display**: Split view shows before/after comparison
 
 ## Demo Tips
@@ -154,4 +154,4 @@ MIT
 
 ## Authors
 
-Built with ❤️ at UofTHacks 13
+Built at UofTHacks 13

@@ -208,10 +208,18 @@ def is_user_function(func, func_name: str) -> bool:
         "_Compressed_pair", "_Vector_alloc", "_List_alloc",
         # GNU C++ extensions
         "__gnu_cxx::", "__gnu_cxx", "char_traits",
+        # Additional STL internal patterns
+        "__ptr_traits", "__alloc_traits", "__iterator_traits",
+        "pointer_to", "addressof", "construct_at", "destroy_at",
+        "allocator_traits", "uses_allocator",
     ]
     for pattern in stl_patterns:
         if pattern in func_name:
             return False
+    
+    # Also check if function name starts with "std::" (may have comment header)
+    if func_name.strip().startswith("std::"):
+        return False
     
     # Skip C++ destructors and constructors (usually not interesting)
     if func_name.startswith("~") or func_name.endswith("::~"):
@@ -242,6 +250,83 @@ def is_user_function(func, func_name: str) -> bool:
             return False
     
     return True
+
+
+def _is_stdlib_code(c_code: str) -> bool:
+    """
+    Check if decompiled code is a standard library function based on its content.
+    This catches functions that slip through the name-based filter.
+    """
+    # Check for std:: namespace in the code (including comments)
+    stdlib_patterns = [
+        "std::",
+        "__gnu_cxx::",
+        "operator new",
+        "operator delete",
+        "__ptr_traits",
+        "__alloc_traits",
+        "pointer_to(",
+        "addressof(",
+        "::allocator",
+        "basic_string<",
+        "char_traits<",
+    ]
+    
+    code_lower = c_code.lower()
+    for pattern in stdlib_patterns:
+        if pattern.lower() in code_lower:
+            return True
+    
+    return False
+
+
+def _is_trivial_function(c_code: str) -> bool:
+    """
+    Check if a function is trivial (just returns the parameter, empty, or single-line).
+    These are usually compiler-generated stubs or wrappers.
+    """
+    import re
+    
+    # Remove comments and whitespace for analysis
+    code_stripped = re.sub(r'/\*.*?\*/', '', c_code, flags=re.DOTALL)
+    code_stripped = re.sub(r'//.*', '', code_stripped)
+    code_stripped = code_stripped.strip()
+    
+    # Count actual statements (lines with semicolons, excluding function signature)
+    lines = [l.strip() for l in code_stripped.split('\n') if l.strip()]
+    
+    # Remove function signature line(s)
+    body_started = False
+    body_lines = []
+    brace_count = 0
+    for line in lines:
+        if '{' in line:
+            body_started = True
+            brace_count += line.count('{')
+            brace_count -= line.count('}')
+            # If there's content after the brace, include it
+            after_brace = line.split('{', 1)[1].strip()
+            if after_brace and after_brace != '}':
+                body_lines.append(after_brace)
+        elif body_started:
+            brace_count += line.count('{')
+            brace_count -= line.count('}')
+            if brace_count > 0 or (brace_count == 0 and line != '}'):
+                body_lines.append(line)
+    
+    # Filter out empty lines and closing braces
+    meaningful_lines = [l for l in body_lines if l and l != '}' and l != '{']
+    
+    # If only one meaningful line and it's just "return param_X;", it's trivial
+    if len(meaningful_lines) <= 1:
+        if not meaningful_lines:
+            return True
+        line = meaningful_lines[0].lower()
+        # Pattern: "return param_1;" or "return something;"
+        if re.match(r'^return\s+\w+\s*;?$', line):
+            return True
+    
+    return False
 
 
 def decompile_binary(file_path: str, job_id: str) -> Dict[str, str]:
@@ -326,6 +411,16 @@ def decompile_binary(file_path: str, job_id: str) -> Dict[str, str]:
                         if decomp_func:
                             c_code = decomp_func.getC()
                             if c_code:
+                                # Post-filter: Skip if decompiled code contains std:: (template instantiation)
+                                if _is_stdlib_code(c_code):
+                                    print(f"[-] Skipping stdlib function: {func_name}")
+                                    skipped_count += 1
+                                    continue
+                                # Post-filter: Skip trivial functions (just return param)
+                                if _is_trivial_function(c_code):
+                                    print(f"[-] Skipping trivial function: {func_name}")
+                                    skipped_count += 1
+                                    continue
                                 functions[func_name] = c_code
                                 print(f"[+] Decompiled: {func_name}")
                 

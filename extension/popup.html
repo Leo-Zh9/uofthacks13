@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Alias</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <img src="icons/icon32.png" alt="Alias" class="header-logo">
+      <div class="header-text">
+        <h1>Alias</h1>
+        <p class="subtitle">AI-Powered Binary Analysis</p>
+      </div>
+    </div>
+    
+    <!-- Gemini Mode Toggle -->
+    <div class="section settings-section">
+      <div class="toggle-row">
+        <span class="toggle-label">Gemini Mode</span>
+        <label class="toggle-switch">
+          <input type="checkbox" id="geminiModeToggle">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <p class="toggle-description" id="modeDescription">Using LLM4Decompile + Gemini</p>
+    </div>
+    
+    <!-- Analyzing Section -->
+    <div class="section">
+      <h2>
+        <span class="icon icon-md">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+        </span>
+        Analyzing
+      </h2>
+      <div id="analyzingList">
+        <p class="no-downloads">No files being analyzed</p>
+      </div>
+      <button id="clearAnalyzingBtn" class="danger-btn small-btn">Clear Stuck Jobs</button>
+    </div>
+    
+    <!-- Completed Section -->
+    <div class="section">
+      <h2>
+        <span class="icon icon-md">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+        </span>
+        Completed
+      </h2>
+      <div id="completedList">
+        <p class="no-downloads">No completed analyses</p>
+      </div>
+      <button id="clearCompletedBtn" class="danger-btn">Clear History</button>
+    </div>
+
+    <!-- Status Section -->
+    <div class="section settings-section">
+      <h2>
+        <span class="icon icon-md">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+          </svg>
+        </span>
+        Status
+      </h2>
+      <p class="info-text">
+        <strong>Server:</strong> <span id="serverStatus">Checking...</span>
+      </p>
+      <p class="info-text">
+        <strong>File Access:</strong> <span id="fileAccessStatus">Checking...</span>
+      </p>
+      <button id="openDashboardBtn" class="primary-btn">Open Dashboard</button>
+    </div>
+
+    <!-- File Access Help -->
+    <div class="section help-section" id="fileAccessHelp" style="display: none;">
+      <h2>
+        <span class="icon icon-md">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
+          </svg>
+        </span>
+        Enable File Access
+      </h2>
+      <p class="help-text">To analyze downloaded files directly:</p>
+      <ol class="help-steps">
+        <li>Go to <code>chrome://extensions</code></li>
+        <li>Find "Alias" and click <strong>Details</strong></li>
+        <li>Enable <strong>"Allow access to file URLs"</strong></li>
+      </ol>
+    </div>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>

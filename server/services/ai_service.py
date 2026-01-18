@@ -50,12 +50,15 @@ async def refactor_code(
         Refactored and cleaned C code
     """
     
-    # Gemini-only mode: bypass LLM4Decompile entirely
+    # Gemini-only mode: Single pass refactoring with Gemini Pro
+    # Cleanup with Gemini Flash is done on-demand when user requests it
     if gemini_mode:
         if gemini_available():
-            print(f"[*] Processing {function_name} with Gemini Pro (Gemini Mode)...")
+            # Gemini Pro - Fix logic and structure
+            print(f"[*] Refactoring {function_name} with Gemini Pro (logic/structure)...")
             refactored = await refactor_with_gemini_async(raw_code, function_name)
             print(f"[+] Gemini Pro refactoring completed: {function_name}")
+            # Note: Gemini Flash cleanup is now on-demand via /api/cleanup endpoint
             return refactored
         else:
             print(f"[!] Gemini Mode requested but Gemini not available, falling back to LLM4Decompile")
