@@ -1,7 +1,7 @@
 """
 Modal deployment for LLM4Decompile model with GPU acceleration.
 
-This runs LLM4Decompile 9B Q4_K_M (quantized) on Modal's cloud GPUs.
+This runs LLM4Decompile 9B Q8_0 (higher precision quantization) on Modal's cloud GPUs.
 Deploy with: modal deploy modal_app.py
 
 Endpoint: https://<your-workspace>--llm4decompile-decompile.modal.run
@@ -12,9 +12,9 @@ import modal
 # Create the Modal app
 app = modal.App("llm4decompile")
 
-# GGUF model from HuggingFace
+# GGUF model from HuggingFace - Q8_0 for higher precision
 MODEL_REPO = "tensorblock/llm4decompile-9b-v2-GGUF"
-MODEL_FILE = "llm4decompile-9b-v2-Q4_K_M.gguf"
+MODEL_FILE = "llm4decompile-9b-v2-Q8_0.gguf"
 
 # Define the container image with CUDA support for llama-cpp-python
 image = (
@@ -38,7 +38,7 @@ image = (
 
 @app.cls(
     image=image,
-    gpu="L4",  # NVIDIA L4 GPU - 24GB VRAM
+    gpu="A100-80GB",  # NVIDIA A100 80GB
     memory=32768,  # 32GB RAM for larger model
     timeout=600,
     scaledown_window=300,  # Keep warm for 5 minutes between requests
@@ -89,8 +89,15 @@ class LLM4Decompile:
         if not ghidra_code:
             return {"error": "ghidra_code is required"}
         
-        # Build prompt in LLM4Decompile format
-        prompt = f"# This is the assembly code:\n{ghidra_code}\n# What is the source code?\n"
+        # Build prompt - explicit instruction for clean output
+        prompt = f"""# This is the assembly code:
+{ghidra_code}
+# Decompile to clean, readable C source code. Do NOT include:
+# - Line number directives (# followed by numbers)
+# - File path comments
+# - Training data artifacts
+# Output only the C function implementation:
+"""
         
         # Generate with llama.cpp
         start = time.time()
@@ -98,24 +105,48 @@ class LLM4Decompile:
             prompt,
             max_tokens=max_tokens,
             temperature=max(temperature, 0.01),
+            top_p=0.9,  # Nucleus sampling - more natural output
             repeat_penalty=1.15,  # Penalize repetition
             frequency_penalty=0.1,  # Additional frequency-based penalty
-            stop=["# This is the assembly code:", "\n\n\n"],
+            stop=[
+                "# This is the assembly code:",
+                "\n\n\n",
+                "/scratch/",  # Training data path leak
+                "/home/",     # Training data path leak
+                "/repos/",    # Training data path leak
+                '# "',        # Preprocessor line directive start
+                "\n# 1",      # Line directives (# followed by digit)
+                "\n# 2",
+                "\n# 3",
+                "\n# 4",
+                "\n# 5",
+                "\n# 6",
+                "\n# 7",
+                "\n# 8",
+                "\n# 9",
+            ],
             echo=False,
         )
         inference_time = (time.time() - start) * 1000
         
         refined_code = output["choices"][0]["text"].strip()
         
-        # Clean up the output
+        # Clean up the output - remove any remaining artifacts
+        import re
+        # Remove preprocessor line directives: # 123 "path" or # 123
+        refined_code = re.sub(r'#\s*\d+\s*"[^"]*"?', '', refined_code)
+        refined_code = re.sub(r'#\s*\d+\s*$', '', refined_code, flags=re.MULTILINE)
+        # Clean up markdown code fences
         if refined_code.startswith("```c"):
             refined_code = refined_code[4:]
         if refined_code.startswith("```"):
             refined_code = refined_code[3:]
         if refined_code.endswith("```"):
             refined_code = refined_code[:-3]
+        # Clean up multiple blank lines
+        refined_code = re.sub(r'\n{3,}', '\n\n', refined_code)
         refined_code = refined_code.strip()
-        
+
         return {
             "refined_code": refined_code,
             "inference_time_ms": round(inference_time, 2),

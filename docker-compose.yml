@@ -20,6 +20,8 @@ services:
       dockerfile: Dockerfile
     ports:
       - "8000:8000"
+    env_file:
+      - ./server/.env
     environment:
       - GHIDRA_INSTALL_DIR=/opt/ghidra
       - GHIDRA_PROJECT_DIR=/tmp/ghidra_projects
