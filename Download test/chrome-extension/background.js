@@ -1,54 +1,81 @@
-// Background service worker
+// Background service worker for EXE Analyzer Extension
 
-const SIZE_LIMIT_MB = 10;
-const SIZE_LIMIT_BYTES = SIZE_LIMIT_MB * 1024 * 1024;
+// Backend API endpoint
+const API_BASE_URL = 'http://localhost:8000';
 
-// Simulated malware check server endpoint (replace with your actual server)
-const MALWARE_CHECK_SERVER = 'http://localhost:3000/api/check-malware';
+// File extensions to analyze
+const ANALYZABLE_EXTENSIONS = ['.exe', '.dll', '.elf', '.bin', '.so'];
 
-// Simulate malware check - in production, this would call your actual server
-async function checkForMalware(fileInfo) {
-  // TODO: Replace with actual server call
-  // Example of what a real implementation would look like:
-  /*
-  try {
-    const response = await fetch(MALWARE_CHECK_SERVER, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        filename: fileInfo.filename,
-        size: fileInfo.size,
-        url: fileInfo.url,
-        mime: fileInfo.mime
-      })
-    });
-    const result = await response.json();
-    return result.isMalware;
-  } catch (err) {
-    console.error('Malware check failed:', err);
-    return false; // Fail open or closed depending on your security policy
-  }
-  */
+// Check if file should be analyzed based on extension
+function shouldAnalyze(filename) {
+  const lowerName = filename.toLowerCase();
+  return ANALYZABLE_EXTENSIONS.some(ext => lowerName.endsWith(ext));
+}
+
+// Upload file to the backend for analysis
+async function uploadFileForAnalysis(filePath, filename) {
+  console.log('📤 Uploading file for analysis:', filename);
   
-  // SIMULATION: Treat all files as malware for testing
-  console.log('🔍 Simulating malware check for:', fileInfo.filename);
-  return new Promise((resolve) => {
-    // Simulate network delay
-    setTimeout(() => {
-      console.log('⚠️ SIMULATED: File flagged as malware');
-      resolve(true); // Always return true (malware detected) for simulation
-    }, 500);
-  });
+  try {
+    // Fetch the local file
+    const fileUrl = 'file:///' + filePath.replace(/\\/g, '/');
+    const response = await fetch(fileUrl);
+    
+    if (!response.ok) {
+      throw new Error('Failed to read local file');
+    }
+    
+    const fileBlob = await response.blob();
+    
+    // Create FormData and upload to backend
+    const formData = new FormData();
+    formData.append('file', fileBlob, filename);
+    
+    const uploadResponse = await fetch(`${API_BASE_URL}/api/upload`, {
+      method: 'POST',
+      body: formData
+    });
+    
+    if (!uploadResponse.ok) {
+      const error = await uploadResponse.json();
+      throw new Error(error.detail || 'Upload failed');
+    }
+    
+    const result = await uploadResponse.json();
+    console.log('✅ Upload successful, job ID:', result.job_id);
+    return result;
+  } catch (err) {
+    console.error('❌ Upload failed:', err);
+    throw err;
+  }
+}
+
+// Poll job status from backend
+async function getJobStatus(jobId) {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/job/${jobId}`);
+    if (!response.ok) {
+      throw new Error('Failed to get job status');
+    }
+    return await response.json();
+  } catch (err) {
+    console.error('Failed to get job status:', err);
+    return null;
+  }
 }
 
 // Runs when the extension is installed
 chrome.runtime.onInstalled.addListener(() => {
-  console.log('Extension installed');
+  console.log('EXE Analyzer Extension installed');
   
-  // Initialize storage with default values
-  chrome.storage.local.set({ 
-    largeDownloads: [],
-    blockedDownloads: []
+  // Initialize storage with default values only if not already set
+  chrome.storage.local.get(['analyzingJobs', 'completedJobs'], (result) => {
+    if (!result.analyzingJobs) {
+      chrome.storage.local.set({ analyzingJobs: [] });
+    }
+    if (!result.completedJobs) {
+      chrome.storage.local.set({ completedJobs: [] });
+    }
   });
 });
 
@@ -62,163 +89,192 @@ chrome.downloads.onChanged.addListener((delta) => {
       const fileSizeMB = (download.fileSize / (1024 * 1024)).toFixed(2);
       const filename = download.filename.split(/[/\\]/).pop();
 
-      // Check for malware FIRST
-      const fileInfo = {
+      // Check if this is an executable file
+      if (!shouldAnalyze(filename)) {
+        console.log('📁 Skipping non-executable file:', filename);
+        return;
+      }
+
+      console.log('🔍 Detected executable download:', filename);
+
+      // Create job entry
+      const jobEntry = {
+        id: null,  // Will be set after upload
         filename: filename,
         fullPath: download.filename,
         size: fileSizeMB,
+        time: new Date().toLocaleTimeString(),
+        date: new Date().toLocaleDateString(),
         url: download.url,
-        mime: download.mime
+        status: 'uploading',
+        stage: 'Uploading to server...',
+        progress: 0,
+        error: null
       };
 
-      const isMalware = await checkForMalware(fileInfo);
+      try {
+        // Upload file to backend
+        const uploadResult = await uploadFileForAnalysis(download.filename, filename);
+        jobEntry.id = uploadResult.job_id;
+        jobEntry.status = 'pending';
+        jobEntry.stage = 'Queued for analysis';
 
-      if (isMalware) {
-        console.log('🚫 Malware detected! Removing file:', filename);
-        
-        // Delete the downloaded file
-        chrome.downloads.removeFile(delta.id, () => {
-          if (chrome.runtime.lastError) {
-            console.error('Failed to remove file:', chrome.runtime.lastError);
-          } else {
-            console.log('✅ Malicious file removed successfully');
-          }
+        // Store the job
+        chrome.storage.local.get(['analyzingJobs'], (result) => {
+          const jobs = result.analyzingJobs || [];
+          jobs.unshift(jobEntry);
+          chrome.storage.local.set({ analyzingJobs: jobs });
         });
 
-        // Remove from download history
-        chrome.downloads.erase({ id: delta.id });
-
-        // Store blocked download info
-        const blockedEntry = {
-          filename: filename,
-          fullPath: download.filename,
-          size: fileSizeMB,
-          time: new Date().toLocaleTimeString(),
-          date: new Date().toLocaleDateString(),
-          url: download.url,
-          reason: 'Malware detected (simulated)'
-        };
-
-        chrome.storage.local.get(['blockedDownloads'], (result) => {
-          const blockedDownloads = result.blockedDownloads || [];
-          blockedDownloads.unshift(blockedEntry);
-          chrome.storage.local.set({ blockedDownloads });
-        });
-
-        // Show warning notification
+        // Show notification
         chrome.notifications.create({
           type: 'basic',
           iconUrl: 'icons/icon128.png',
-          title: '🚫 Malware Blocked!',
-          message: `${filename} was detected as malware and has been removed.`,
-          priority: 2,
-          requireInteraction: true
+          title: '🔬 Analyzing Executable',
+          message: `${filename} has been sent for LLM analysis.`,
+          priority: 1
         });
 
-        return; // Don't process further
-      }
+        // Start polling for job status
+        pollJobStatus(uploadResult.job_id);
 
-      // If not malware, continue with size check
-      if (download.fileSize > SIZE_LIMIT_BYTES) {
-        // Build file:// URL from local path
-        const localPath = download.filename;
-        const fileUrl = 'file:///' + localPath.replace(/\\/g, '/');
-        
-        const previewEntry = {
-          filename: filename,
-          fullPath: localPath,
-          size: fileSizeMB,
-          time: new Date().toLocaleTimeString(),
-          previewType: null,
-          preview: null,
-          mime: null,
-          url: download.url || null
-        };
+      } catch (err) {
+        console.error('Failed to upload file:', err);
+        jobEntry.status = 'failed';
+        jobEntry.error = err.message;
+        jobEntry.stage = 'Upload failed';
 
-        try {
-          // Try to fetch the first 1KB of the LOCAL file to prove we can access it
-          const res = await fetch(fileUrl);
-          if (res && res.ok) {
-            const arrayBuffer = await res.arrayBuffer();
-            const bytes = new Uint8Array(arrayBuffer);
-            
-            // Only take first 1024 bytes for preview
-            const previewBytes = bytes.slice(0, 1024);
-            
-            // Convert to hex dump format
-            let hexDump = '';
-            for (let i = 0; i < previewBytes.length; i += 16) {
-              // Offset
-              const offset = i.toString(16).padStart(8, '0');
-              
-              // Hex values
-              let hex = '';
-              let ascii = '';
-              for (let j = 0; j < 16; j++) {
-                if (i + j < previewBytes.length) {
-                  const byte = previewBytes[i + j];
-                  hex += byte.toString(16).padStart(2, '0') + ' ';
-                  // Printable ASCII range
-                  ascii += (byte >= 32 && byte <= 126) ? String.fromCharCode(byte) : '.';
-                } else {
-                  hex += '   ';
-                  ascii += ' ';
-                }
-              }
-              
-              hexDump += `${offset}  ${hex} |${ascii}|\n`;
-            }
-            
-            previewEntry.preview = `Successfully read ${bytes.length} bytes from local file!\nShowing first ${previewBytes.length} bytes:\n\n${hexDump}`;
-            previewEntry.previewType = 'bytes';
-            previewEntry.totalBytes = bytes.length;
-          }
-        } catch (err) {
-          // Fetching local file failed
-          console.warn('Local file fetch failed:', err);
-          previewEntry.preview = `Failed to read local file:\n${err.message}\n\nMake sure "Allow access to file URLs" is enabled for this extension in chrome://extensions/`;
-          previewEntry.previewType = 'error';
-        }
+        // Store failed job
+        chrome.storage.local.get(['analyzingJobs'], (result) => {
+          const jobs = result.analyzingJobs || [];
+          jobs.unshift(jobEntry);
+          chrome.storage.local.set({ analyzingJobs: jobs });
+        });
 
-        // Store the large download info
-        chrome.storage.local.get(['largeDownloads'], (result) => {
-          const largeDownloads = result.largeDownloads || [];
-          largeDownloads.push(previewEntry);
-          chrome.storage.local.set({ largeDownloads });
-
-          // Notify via notification API if available
-          chrome.notifications.create({
-            type: 'basic',
-            iconUrl: 'icons/icon128.png',
-            title: 'Large File Downloaded',
-            message: `${previewEntry.filename} (${fileSizeMB} MB) exceeds the ${SIZE_LIMIT_MB}MB limit`
-          });
+        // Show error notification
+        chrome.notifications.create({
+          type: 'basic',
+          iconUrl: 'icons/icon128.png',
+          title: '❌ Upload Failed',
+          message: `Failed to upload ${filename}: ${err.message}`,
+          priority: 2
         });
       }
     });
   }
 });
 
+// Poll job status and update storage
+async function pollJobStatus(jobId) {
+  const pollInterval = 3000; // 3 seconds
+  const maxPolls = 200; // Max ~10 minutes of polling
+  let pollCount = 0;
+
+  const poll = async () => {
+    pollCount++;
+    console.log(`Polling job ${jobId}, attempt ${pollCount}`);
+    
+    if (pollCount > maxPolls) {
+      console.log('Max polling reached for job:', jobId);
+      return;
+    }
+
+    const status = await getJobStatus(jobId);
+    console.log('Job status:', status);
+    
+    if (!status) {
+      console.log('No status returned, retrying...');
+      setTimeout(poll, pollInterval);
+      return;
+    }
+
+    // Update job in storage
+    chrome.storage.local.get(['analyzingJobs', 'completedJobs'], (result) => {
+      let analyzingJobs = result.analyzingJobs || [];
+      let completedJobs = result.completedJobs || [];
+      
+      const jobIndex = analyzingJobs.findIndex(j => j.id === jobId);
+      console.log(`Job index in analyzingJobs: ${jobIndex}, total jobs: ${analyzingJobs.length}`);
+      
+      if (jobIndex === -1) {
+        console.log('Job not found in analyzingJobs, stopping poll');
+        return;
+      }
+
+      const job = { ...analyzingJobs[jobIndex] };
+      job.status = status.status;
+      job.stage = status.stage;
+      job.progress = status.progress;
+
+      if (status.status === 'completed' || status.status === 'failed') {
+        console.log(`Job ${jobId} finished with status: ${status.status}`);
+        // Move to completed jobs
+        if (status.status === 'failed') {
+          job.error = status.error;
+        }
+        analyzingJobs = analyzingJobs.filter(j => j.id !== jobId);
+        completedJobs.unshift(job);
+
+        chrome.storage.local.set({ analyzingJobs, completedJobs }, () => {
+          console.log('Moved job to completedJobs');
+        });
+
+        // Show completion notification
+        const icon = status.status === 'completed' ? '✅' : '❌';
+        const title = status.status === 'completed' ? 'Analysis Complete' : 'Analysis Failed';
+        chrome.notifications.create({
+          type: 'basic',
+          iconUrl: 'icons/icon128.png',
+          title: `${icon} ${title}`,
+          message: `${job.filename} - ${status.stage}`,
+          priority: 1
+        });
+      } else {
+        // Update in place
+        analyzingJobs[jobIndex] = job;
+        chrome.storage.local.set({ analyzingJobs }, () => {
+          console.log('Updated job in analyzingJobs');
+        });
+        
+        // Continue polling
+        setTimeout(poll, pollInterval);
+      }
+    });
+  };
+
+  // Start polling immediately
+  poll();
+}
+
 // Listen for messages from popup
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.action === 'getLargeDownloads') {
-    chrome.storage.local.get(['largeDownloads'], (result) => {
-      sendResponse({ downloads: result.largeDownloads || [] });
+  if (request.action === 'getAnalyzingJobs') {
+    chrome.storage.local.get(['analyzingJobs'], (result) => {
+      sendResponse({ jobs: result.analyzingJobs || [] });
     });
     return true;
   }
   
-  if (request.action === 'getBlockedDownloads') {
-    chrome.storage.local.get(['blockedDownloads'], (result) => {
-      sendResponse({ downloads: result.blockedDownloads || [] });
+  if (request.action === 'getCompletedJobs') {
+    chrome.storage.local.get(['completedJobs'], (result) => {
+      sendResponse({ jobs: result.completedJobs || [] });
     });
     return true;
   }
   
-  if (request.action === 'clearBlockedDownloads') {
-    chrome.storage.local.set({ blockedDownloads: [] }, () => {
+  if (request.action === 'clearCompletedJobs') {
+    chrome.storage.local.set({ completedJobs: [] }, () => {
       sendResponse({ success: true });
     });
+    return true;
+  }
+
+  if (request.action === 'openDashboard') {
+    // Open the main frontend dashboard with the job results
+    chrome.tabs.create({ 
+      url: `http://localhost:3000?jobId=${request.jobId}` 
+    });
+    sendResponse({ success: true });
     return true;
   }
 });

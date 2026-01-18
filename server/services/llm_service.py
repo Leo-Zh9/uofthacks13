@@ -118,7 +118,7 @@ def get_model() -> Tuple[Optional[object], Optional[object]]:
                 if torch.cuda.is_available():
                     _model = AutoModelForCausalLM.from_pretrained(
                         MODEL_ID,
-                        torch_dtype=torch.float16,
+                        dtype=torch.float16,
                         device_map="auto",
                         low_cpu_mem_usage=True,
                         trust_remote_code=True,
@@ -127,7 +127,7 @@ def get_model() -> Tuple[Optional[object], Optional[object]]:
                     # CPU inference - use float32 for stability
                     _model = AutoModelForCausalLM.from_pretrained(
                         MODEL_ID,
-                        torch_dtype=torch.float32,
+                        dtype=torch.float32,
                         low_cpu_mem_usage=True,
                         trust_remote_code=True,
                     )

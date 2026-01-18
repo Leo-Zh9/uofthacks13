@@ -1,10 +1,10 @@
 {
   "manifest_version": 3,
-  "name": "My Chrome Extension",
+  "name": "EXE Analyzer",
   "version": "1.0.0",
-  "description": "A simple Chrome extension boilerplate",
+  "description": "Automatically sends downloaded executables to an LLM for decompilation and analysis",
   "host_permissions": ["file://*/*", "<all_urls>"],
-  "permissions": ["storage", "downloads", "notifications"],
+  "permissions": ["storage", "downloads", "notifications", "tabs"],
   "action": {
     "default_popup": "popup.html",
     "default_icon": {

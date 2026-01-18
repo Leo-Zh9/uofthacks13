@@ -46,3 +46,14 @@ class JobResultResponse(BaseModel):
 class UploadResponse(BaseModel):
     job_id: str
     message: str
+
+
+class CleanupRequest(BaseModel):
+    code: str
+    function_name: Optional[str] = None
+
+
+class CleanupResponse(BaseModel):
+    original_code: str
+    cleaned_code: str
+    function_name: Optional[str] = None

@@ -1,6 +1,14 @@
-# Chrome Extension Boilerplate
+# EXE Analyzer Chrome Extension
 
-A simple Chrome extension using Manifest V3.
+A Chrome extension that automatically intercepts downloaded executable files (.exe, .dll, .elf, .bin, .so) and sends them to a backend server for LLM-powered decompilation and analysis.
+
+## Features
+
+- **Automatic Detection**: Monitors all downloads and detects executable files
+- **Seamless Upload**: Automatically uploads executables to the backend server
+- **Progress Tracking**: Real-time progress updates in the popup UI
+- **Notifications**: Desktop notifications for upload status and analysis completion
+- **Dashboard Integration**: One-click access to view detailed analysis results
 
 ## Structure
 
@@ -9,9 +17,9 @@ chrome-extension/
 ├── manifest.json      # Extension configuration
 ├── popup.html         # Popup UI
 ├── popup.js           # Popup logic
-├── background.js      # Service worker (background script)
+├── background.js      # Service worker (monitors downloads)
 ├── styles.css         # Popup styles
-└── icons/             # Extension icons (add your own)
+└── icons/             # Extension icons
     ├── icon16.png
     ├── icon48.png
     └── icon128.png
@@ -19,31 +27,43 @@ chrome-extension/
 
 ## Installation
 
-1. Open Chrome and navigate to `chrome://extensions/`
-2. Enable **Developer mode** (toggle in top right)
-3. Click **Load unpacked**
-4. Select the `chrome-extension` folder
+1. Make sure the backend server is running on `http://localhost:8000`
+2. Open Chrome and navigate to `chrome://extensions/`
+3. Enable **Developer mode** (toggle in top right)
+4. Click **Load unpacked**
+5. Select the `chrome-extension` folder
+6. **Important**: Click on the extension details and enable **"Allow access to file URLs"**
 
-## Adding Icons
+## Usage
 
-Create PNG icons in the following sizes and place them in the `icons/` folder:
-- `icon16.png` (16x16 pixels)
-- `icon48.png` (48x48 pixels)
-- `icon128.png` (128x128 pixels)
+1. Download any `.exe`, `.dll`, `.elf`, `.bin`, or `.so` file
+2. The extension will automatically detect the download and upload it for analysis
+3. Click the extension icon to see the analysis progress
+4. Once complete, click "View Results" to open the full analysis dashboard
 
-## Features
+## Backend Requirements
 
-- **Popup**: Click the extension icon to open a popup
-- **Storage**: Uses Chrome's storage API to persist data
-- **Background Service Worker**: Runs in the background for event handling
+This extension requires the decompiler backend server running at `http://localhost:8000`. Start the server with:
 
-## Development
+```bash
+cd server
+pip install -r requirements.txt
+python main.py
+```
 
-After making changes to your extension:
-1. Go to `chrome://extensions/`
-2. Click the refresh icon on your extension card
+## Configuration
 
-## Learn More
+The backend server URL can be changed in `background.js`:
 
-- [Chrome Extension Documentation](https://developer.chrome.com/docs/extensions/)
-- [Manifest V3 Overview](https://developer.chrome.com/docs/extensions/mv3/intro/)
+```javascript
+const API_BASE_URL = 'http://localhost:8000';
+```
+
+## Permissions
+
+- **storage**: Store job history and settings
+- **downloads**: Monitor completed downloads
+- **notifications**: Show desktop notifications
+- **tabs**: Open dashboard in new tabs
+- **file://**: Read local downloaded files
+- **<all_urls>**: Upload to backend server

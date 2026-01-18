@@ -33,6 +33,12 @@ PE_MAGIC = b"MZ"
 ELF_MAGIC = b"\x7fELF"
 
 
+@router.get("/health")
+async def api_health_check():
+    """Health check endpoint for the API."""
+    return {"status": "healthy", "api": "decompiler"}
+
+
 def validate_binary(content: bytes) -> bool:
     """Validate that the file is a PE or ELF binary."""
     if content[:2] == PE_MAGIC:
@@ -294,9 +300,44 @@ async def warmup_model():
 async def get_model_status():
     """Check the status of the LLM4Decompile model."""
     from services.llm_service import is_available, _model
+    from services.gemini_service import is_available as gemini_available
     
     return {
         "llm4decompile_available": is_available(),
         "model_loaded": _model is not None,
+        "gemini_available": gemini_available(),
         "openai_configured": bool(os.environ.get("OPENAI_API_KEY")),
     }
+
+
+@router.post("/cleanup")
+async def cleanup_code(request: dict):
+    """
+    Clean up decompiled code using Gemini to make it more human-readable.
+    
+    This endpoint removes unused variables, simplifies variable names,
+    and cleans up redundant code patterns.
+    """
+    from services.gemini_service import cleanup_decompiled_code_async, is_available
+    
+    if not is_available():
+        raise HTTPException(
+            status_code=503,
+            detail="Gemini API not configured. Set GEMINI_API_KEY environment variable."
+        )
+    
+    code = request.get("code", "")
+    function_name = request.get("function_name")
+    
+    if not code:
+        raise HTTPException(status_code=400, detail="No code provided")
+    
+    try:
+        cleaned_code = await cleanup_decompiled_code_async(code, function_name)
+        return {
+            "original_code": code,
+            "cleaned_code": cleaned_code,
+            "function_name": function_name
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Cleanup failed: {str(e)}")

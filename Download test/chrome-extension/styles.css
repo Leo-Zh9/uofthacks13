@@ -21,7 +21,13 @@ body {
 h1 {
   font-size: 18px;
   color: #333;
-  margin-bottom: 8px;
+  margin-bottom: 4px;
+}
+
+.subtitle {
+  font-size: 12px;
+  color: #666;
+  margin-bottom: 12px;
 }
 
 h2 {
@@ -42,9 +48,19 @@ p {
   margin-bottom: 16px;
 }
 
-#blockedList,
-#downloadsList {
-  max-height: 450px;
+.settings-section {
+  background: #f8f9fa;
+  padding: 12px;
+  border-radius: 8px;
+}
+
+.info-text {
+  margin-bottom: 12px;
+}
+
+#analyzingList,
+#completedList {
+  max-height: 200px;
   overflow-y: auto;
   border: 1px solid #e0e0e0;
   border-radius: 6px;
@@ -64,7 +80,7 @@ p {
   padding: 10px 12px;
   border-radius: 4px;
   background-color: #fff;
-  border-left: 3px solid #ff6b6b;
+  border-left: 3px solid #4285f4;
   margin-bottom: 8px;
   display: flex;
   flex-direction: column;
@@ -75,9 +91,101 @@ p {
   margin-bottom: 0;
 }
 
-.download-item.blocked {
+.download-item.analyzing {
+  border-left-color: #ffc107;
+  background-color: #fffdf5;
+}
+
+.download-item.success {
+  border-left-color: #28a745;
+  background-color: #f5fff7;
+}
+
+.download-item.failed {
   border-left-color: #dc3545;
   background-color: #fff5f5;
+}
+
+.job-status {
+  margin-top: 6px;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 8px;
+  background-color: #e9ecef;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #4285f4, #34a853);
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.status-text {
+  font-size: 11px;
+  color: #666;
+}
+
+.job-result {
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  margin-top: 4px;
+}
+
+.job-result.success {
+  background-color: #d4edda;
+  color: #155724;
+}
+
+.job-result.failed {
+  background-color: #f8d7da;
+  color: #721c24;
+}
+
+.view-results-btn {
+  margin-top: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  background-color: #28a745;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  width: fit-content;
+}
+
+.view-results-btn:hover {
+  background-color: #218838;
+}
+
+.status-connected {
+  color: #28a745;
+}
+
+.status-error,
+.status-offline {
+  color: #dc3545;
+}
+
+.primary-btn {
+  background-color: #4285f4;
+  color: white;
+  border: none;
+  padding: 10px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  width: 100%;
+}
+
+.primary-btn:hover {
+  background-color: #3367d6;
 }
 
 .blocked-reason {

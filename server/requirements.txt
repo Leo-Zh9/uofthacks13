@@ -5,6 +5,9 @@ pyghidra>=1.0.0
 pydantic>=2.10.0
 python-dotenv>=1.0.0
 
+# Gemini API for code cleanup
+google-generativeai>=0.8.0
+
 # LLM4Decompile 1.3B dependencies
 # Note: torch is installed separately in Dockerfile for CPU/GPU flexibility
 transformers>=4.36.0

@@ -68,6 +68,32 @@ export async function getJobResult(jobId: string): Promise<JobResultResponse> {
   return response.json();
 }
 
+export interface CleanupResponse {
+  original_code: string;
+  cleaned_code: string;
+  function_name: string | null;
+}
+
+export async function cleanupCodeWithGemini(code: string, functionName?: string): Promise<CleanupResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/cleanup`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      code,
+      function_name: functionName,
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Cleanup failed');
+  }
+
+  return response.json();
+}
+
 export function downloadAsFile(content: string, filename: string) {
   const blob = new Blob([content], { type: 'text/plain' });
   const url = URL.createObjectURL(blob);

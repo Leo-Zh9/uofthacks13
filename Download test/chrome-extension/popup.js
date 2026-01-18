@@ -1,123 +1,112 @@
-document.addEventListener('DOMContentLoaded', () => {
-  const downloadsList = document.getElementById('downloadsList');
-  const blockedList = document.getElementById('blockedList');
-  const clearBtn = document.getElementById('clearBtn');
-  const clearBlockedBtn = document.getElementById('clearBlockedBtn');
+const API_BASE_URL = 'http://localhost:8000';
 
-  // Load blocked downloads
-  const loadBlockedDownloads = () => {
-    chrome.storage.local.get(['blockedDownloads'], (result) => {
-      const blocked = result.blockedDownloads || [];
-      
-      if (blocked.length === 0) {
-        blockedList.innerHTML = '<p class="no-downloads">No blocked files</p>';
+document.addEventListener('DOMContentLoaded', () => {
+  const analyzingList = document.getElementById('analyzingList');
+  const completedList = document.getElementById('completedList');
+  const clearCompletedBtn = document.getElementById('clearCompletedBtn');
+  const openDashboardBtn = document.getElementById('openDashboardBtn');
+  const serverStatus = document.getElementById('serverStatus');
+
+  // Check server status
+  async function checkServerStatus() {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/health`, { 
+        method: 'GET',
+        signal: AbortSignal.timeout(3000)
+      });
+      if (response.ok) {
+        serverStatus.textContent = '🟢 Connected';
+        serverStatus.className = 'status-connected';
       } else {
-        blockedList.innerHTML = blocked.map((dl) => `
-          <div class="download-item blocked">
-            <div class="download-name">🚫 ${escapeHtml(dl.filename)}</div>
-            <div class="download-path">${escapeHtml(dl.fullPath || '')}</div>
-            <div class="download-info">${dl.size} MB · ${dl.time} · ${dl.date}</div>
-            <div class="blocked-reason">${escapeHtml(dl.reason)}</div>
+        serverStatus.textContent = '🔴 Error';
+        serverStatus.className = 'status-error';
+      }
+    } catch (err) {
+      serverStatus.textContent = '🔴 Offline';
+      serverStatus.className = 'status-offline';
+    }
+  }
+
+  // Load analyzing jobs
+  const loadAnalyzingJobs = () => {
+    chrome.storage.local.get(['analyzingJobs'], (result) => {
+      const jobs = result.analyzingJobs || [];
+      
+      if (jobs.length === 0) {
+        analyzingList.innerHTML = '<p class="no-downloads">No files being analyzed</p>';
+      } else {
+        analyzingList.innerHTML = jobs.map((job) => `
+          <div class="download-item analyzing">
+            <div class="download-name">⚙️ ${escapeHtml(job.filename)}</div>
+            <div class="download-path">${escapeHtml(job.fullPath || '')}</div>
+            <div class="download-info">${job.size} MB · ${job.time} · ${job.date}</div>
+            <div class="job-status">
+              <div class="progress-bar">
+                <div class="progress-fill" style="width: ${job.progress}%"></div>
+              </div>
+              <div class="status-text">${escapeHtml(job.stage)} (${job.progress}%)</div>
+            </div>
           </div>
         `).join('');
       }
     });
   };
 
-  // Load large downloads from storage
-  const loadDownloads = () => {
-    chrome.storage.local.get(['largeDownloads'], (result) => {
-      const downloads = result.largeDownloads || [];
+  // Load completed jobs
+  const loadCompletedJobs = () => {
+    chrome.storage.local.get(['completedJobs'], (result) => {
+      const jobs = result.completedJobs || [];
       
-      if (downloads.length === 0) {
-        downloadsList.innerHTML = '<p class="no-downloads">No large files detected yet</p>';
+      if (jobs.length === 0) {
+        completedList.innerHTML = '<p class="no-downloads">No completed analyses</p>';
       } else {
-        downloadsList.innerHTML = downloads.map((dl, idx) => {
-          const hasPreview = dl.previewType && dl.preview;
-          
-          // Build preview content based on type
-          let previewContent = '';
-          if (hasPreview) {
-            switch (dl.previewType) {
-              case 'text':
-                previewContent = `<pre class="preview-text">${escapeHtml(dl.preview)}</pre>`;
-                break;
-              case 'bytes':
-                previewContent = `<pre class="preview-bytes">${escapeHtml(dl.preview)}</pre>`;
-                break;
-              case 'error':
-                previewContent = `<pre class="preview-error">${escapeHtml(dl.preview)}</pre>`;
-                break;
-              case 'image':
-                previewContent = `<img class="preview-image" src="${dl.preview}"/>`;
-                break;
-              case 'pdf':
-                previewContent = `<div class="preview-pdf">
-                  <iframe class="pdf-embed" src="${dl.preview}" type="application/pdf"></iframe>
-                </div>`;
-                break;
-              case 'video':
-                previewContent = `<video class="preview-video" controls src="${dl.preview}">Your browser does not support video.</video>`;
-                break;
-              case 'audio':
-                previewContent = `<audio class="preview-audio" controls src="${dl.preview}">Your browser does not support audio.</audio>`;
-                break;
-              default:
-                previewContent = `<p>Preview type: ${dl.previewType}</p>`;
-            }
-          }
-          
-          // File type icon
-          const icon = getFileIcon(dl.filename, dl.previewType);
-          
-          // Show full path if available
-          const pathInfo = dl.fullPath ? `<div class="download-path">${escapeHtml(dl.fullPath)}</div>` : '';
+        completedList.innerHTML = jobs.map((job) => {
+          const icon = job.status === 'completed' ? '✅' : '❌';
+          const statusClass = job.status === 'completed' ? 'success' : 'failed';
           
           return `
-          <div class="download-item" data-idx="${idx}">
-            <div class="download-name">${icon} ${dl.filename}</div>
-            ${pathInfo}
-            <div class="download-info">${dl.size} MB · ${dl.time}</div>
-            ${hasPreview ? `<button class="toggle-preview">Show Preview</button>` : `<div class="no-preview">No preview available</div>`}
-            ${hasPreview ? `<div class="preview" style="display:none">${previewContent}</div>` : ''}
-          </div>
-        `}).join('');
+            <div class="download-item ${statusClass}" data-job-id="${job.id}">
+              <div class="download-name">${icon} ${escapeHtml(job.filename)}</div>
+              <div class="download-path">${escapeHtml(job.fullPath || '')}</div>
+              <div class="download-info">${job.size} MB · ${job.time} · ${job.date}</div>
+              <div class="job-result ${statusClass}">
+                ${job.error ? escapeHtml(job.error) : job.stage}
+              </div>
+              ${job.status === 'completed' ? `<button class="view-results-btn" data-job-id="${job.id}">View Results</button>` : ''}
+            </div>
+          `;
+        }).join('');
       }
     });
   };
 
-  // Load all data on popup open
-  loadBlockedDownloads();
-  loadDownloads();
-
-  // Clear buttons
-  clearBtn.addEventListener('click', () => {
-    chrome.storage.local.set({ largeDownloads: [] }, loadDownloads);
-  });
-
-  clearBlockedBtn.addEventListener('click', () => {
-    chrome.storage.local.set({ blockedDownloads: [] }, loadBlockedDownloads);
-  });
+  // Check server and load all data on popup open
+  checkServerStatus();
+  loadAnalyzingJobs();
+  loadCompletedJobs();
 
   // Refresh every 2 seconds
   setInterval(() => {
-    loadBlockedDownloads();
-    loadDownloads();
+    loadAnalyzingJobs();
+    loadCompletedJobs();
   }, 2000);
-  
-  // Delegate click for preview toggles
-  downloadsList.addEventListener('click', (e) => {
-    if (e.target.classList.contains('toggle-preview')) {
-      const item = e.target.closest('.download-item');
-      if (!item) return;
-      const previewEl = item.querySelector('.preview');
-      if (!previewEl) return;
-      if (previewEl.style.display === 'none') {
-        previewEl.style.display = 'block';
-        e.target.textContent = 'Hide Preview';
-      } else {
-        previewEl.style.display = 'none';
-        e.target.textContent = 'Show Preview';
+
+  // Clear completed jobs
+  clearCompletedBtn.addEventListener('click', () => {
+    chrome.storage.local.set({ completedJobs: [] }, loadCompletedJobs);
+  });
+
+  // Open dashboard
+  openDashboardBtn.addEventListener('click', () => {
+    chrome.tabs.create({ url: 'http://localhost:3000' });
+  });
+
+  // Handle view results button clicks
+  completedList.addEventListener('click', (e) => {
+    if (e.target.classList.contains('view-results-btn')) {
+      const jobId = e.target.dataset.jobId;
+      if (jobId) {
+        chrome.tabs.create({ url: `http://localhost:3000?jobId=${jobId}` });
       }
     }
   });
@@ -134,20 +123,4 @@ function escapeHtml(str) {
       "'": '&#39;'
     }[c];
   });
-}
-
-function getFileIcon(filename, previewType) {
-  const ext = filename.split('.').pop().toLowerCase();
-  
-  if (previewType === 'pdf' || ext === 'pdf') return '📄';
-  if (previewType === 'video' || ['mp4', 'webm', 'mov', 'avi'].includes(ext)) return '🎬';
-  if (previewType === 'audio' || ['mp3', 'wav', 'flac', 'aac'].includes(ext)) return '🎵';
-  if (previewType === 'image' || ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(ext)) return '🖼️';
-  if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) return '📦';
-  if (['exe', 'msi', 'dmg', 'app'].includes(ext)) return '⚙️';
-  if (['doc', 'docx'].includes(ext)) return '📝';
-  if (['xls', 'xlsx'].includes(ext)) return '📊';
-  if (['ppt', 'pptx'].includes(ext)) return '📽️';
-  
-  return '📎';
 }
