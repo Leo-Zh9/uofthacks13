@@ -141,12 +141,12 @@ CODE TO CLEAN UP:
 {code}"""
         
         # Make the API call using new google.genai SDK
-        # Higher temperature (0.7) for more creative renaming and comments
+        # Higher temperature (1.0) for more creative renaming and comments
         response = client.models.generate_content(
             model=GEMINI_CLEANUP_MODEL,
             contents=CLEANUP_SYSTEM_PROMPT + "\n\n" + user_prompt,
             config={
-                "temperature": 0.7,
+                "temperature": 1.0,
                 "max_output_tokens": 16384,
             }
         )
@@ -198,21 +198,20 @@ CODE TO CLEAN UP:
 {code}"""
         
         # Make the API call using new google.genai SDK (async)
-        # Higher temperature (0.7) for more creative renaming and comments
+        # Higher temperature (1.0) for more creative renaming and comments
         response = await client.aio.models.generate_content(
             model=GEMINI_CLEANUP_MODEL,
             contents=CLEANUP_SYSTEM_PROMPT + "\n\n" + user_prompt,
             config={
-                "temperature": 0.7,
+                "temperature": 1.0,
                 "max_output_tokens": 16384,
             }
         )
         
         cleaned_code = response.text.strip()
         
-        # Remove any markdown code fences if present
-        cleaned_code = re.sub(r'^```(?:c|cpp|c\+\+)?\n?', '', cleaned_code)
-        cleaned_code = re.sub(r'\n?```$', '', cleaned_code)
+        # Remove any markdown code fences and artifacts
+        cleaned_code = _clean_markdown_artifacts(cleaned_code)
         
         return cleaned_code.strip()
         
@@ -321,12 +320,12 @@ async def refactor_with_gemini_async(code: str, function_name: Optional[str] = N
 {code}"""
         
         # Make the API call using Gemini Pro for refactoring
-        # Temperature 0.7 for logical changes while maintaining correctness
+        # Temperature 0.8 for logical changes while maintaining correctness
         response = await client.aio.models.generate_content(
             model=GEMINI_REFACTOR_MODEL,
             contents=REFACTOR_SYSTEM_PROMPT + "\n\n" + user_prompt,
             config={
-                "temperature": 0.7,
+                "temperature": 0.8,
                 "max_output_tokens": 16384,
             }
         )

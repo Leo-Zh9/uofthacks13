@@ -254,27 +254,48 @@ def is_user_function(func, func_name: str) -> bool:
 
 def _is_stdlib_code(c_code: str) -> bool:
     """
-    Check if decompiled code is a standard library function based on its content.
-    This catches functions that slip through the name-based filter.
-    """
-    # Check for std:: namespace in the code (including comments)
-    stdlib_patterns = [
-        "std::",
-        "__gnu_cxx::",
-        "operator new",
-        "operator delete",
-        "__ptr_traits",
-        "__alloc_traits",
-        "pointer_to(",
-        "addressof(",
-        "::allocator",
-        "basic_string<",
-        "char_traits<",
-    ]
+    Check if decompiled code IS a standard library function (not just uses stdlib types).
     
-    code_lower = c_code.lower()
-    for pattern in stdlib_patterns:
-        if pattern.lower() in code_lower:
+    Key distinction:
+    - /* std::__ptr_traits<...>::pointer_to */ → IS stdlib (function name in std:: namespace)
+    - /* send_email(std::string, std::string) */ → NOT stdlib (just uses std::string params)
+    
+    The difference: stdlib functions have std:: at the START of the function name in the comment.
+    """
+    lines = c_code.strip().split('\n')
+    if not lines:
+        return False
+    
+    # Check the first line (comment header) for function name pattern
+    first_line = lines[0].strip()
+    
+    # Pattern: /* std::something... */ - function NAME is in std:: namespace
+    # This matches: /* std::__ptr_traits<char*,char,false>::pointer_to(char&) */
+    # But NOT: /* send_email(std::string, std::string, std::string) */
+    import re
+    
+    # Check if comment starts with the function being in std:: namespace
+    # The function name comes right after /* and before any (
+    stdlib_func_pattern = re.compile(r'^/\*\s*(std::|__gnu_cxx::|operator\s*(new|delete))')
+    if stdlib_func_pattern.match(first_line):
+        return True
+    
+    # Also check the actual function signature line (not in comment)
+    # Look for lines that define a function in std:: namespace
+    for line in lines[:5]:
+        line = line.strip()
+        # Skip comment lines for this check
+        if line.startswith('/*') or line.startswith('*') or line.startswith('//'):
+            continue
+        # Check if function signature starts with std:: or __gnu_cxx::
+        if re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*\s+std::', line):
+            return True
+        if re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*\s+__gnu_cxx::', line):
+            return True
+        # Check if return type + function name is std::
+        if re.match(r'^std::', line):
+            return True
+        if re.match(r'^__gnu_cxx::', line):
             return True
     
     return False
