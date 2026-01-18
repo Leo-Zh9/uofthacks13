@@ -84,7 +84,7 @@ class LLM4Decompile:
         
         ghidra_code = request.get("ghidra_code", "")
         max_tokens = request.get("max_tokens", 2048)
-        temperature = request.get("temperature", 0.1)  # Slightly higher to reduce repetition
+        temperature = request.get("temperature", 0.01)  # Slightly higher to reduce repetition
         
         if not ghidra_code:
             return {"error": "ghidra_code is required"}
