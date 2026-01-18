@@ -258,45 +258,52 @@ def _is_stdlib_code(c_code: str) -> bool:
     
     Key distinction:
     - /* std::__ptr_traits<...>::pointer_to */ → IS stdlib (function name in std:: namespace)
+    - /* unsigned long long const& std::min<...>(...) */ → IS stdlib (std::min)
     - /* send_email(std::string, std::string) */ → NOT stdlib (just uses std::string params)
     
-    The difference: stdlib functions have std:: at the START of the function name in the comment.
+    The function name may appear after a return type in the comment.
     """
+    import re
+    
     lines = c_code.strip().split('\n')
     if not lines:
         return False
     
-    # Check the first line (comment header) for function name pattern
-    first_line = lines[0].strip()
+    # Join first few lines for multi-line comments
+    header = '\n'.join(lines[:5])
     
-    # Pattern: /* std::something... */ - function NAME is in std:: namespace
-    # This matches: /* std::__ptr_traits<char*,char,false>::pointer_to(char&) */
-    # But NOT: /* send_email(std::string, std::string, std::string) */
-    import re
+    # Check for std:: or __gnu_cxx:: as the FUNCTION NAME (not parameter type)
+    # In Ghidra comments: /* return_type function_name(params) */
+    # Function name with std:: can appear after return type
     
-    # Check if comment starts with the function being in std:: namespace
-    # The function name comes right after /* and before any (
-    stdlib_func_pattern = re.compile(r'^/\*\s*(std::|__gnu_cxx::|operator\s*(new|delete))')
-    if stdlib_func_pattern.match(first_line):
-        return True
+    # Pattern 1: std::func_name( - the function name is in std:: namespace
+    # This catches: std::min<...>(...), std::__ptr_traits<...>::method(...)
+    # The key is that std:: is followed by an identifier and then < or (
+    if re.search(r'\bstd::[a-zA-Z_][a-zA-Z0-9_<>:,\s]*\s*\(', header):
+        # But exclude cases where std:: only appears inside parameter list
+        # Find where the first ( is - everything before is return type + func name
+        first_paren = header.find('(')
+        if first_paren > 0:
+            before_params = header[:first_paren]
+            # If std:: appears before the opening paren, it's the function name
+            if 'std::' in before_params or '__gnu_cxx::' in before_params:
+                return True
     
-    # Also check the actual function signature line (not in comment)
-    # Look for lines that define a function in std:: namespace
+    # Pattern 2: Check actual function signature line (not comment)
     for line in lines[:5]:
         line = line.strip()
-        # Skip comment lines for this check
+        # Skip comment lines
         if line.startswith('/*') or line.startswith('*') or line.startswith('//'):
             continue
-        # Check if function signature starts with std:: or __gnu_cxx::
-        if re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*\s+std::', line):
-            return True
-        if re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*\s+__gnu_cxx::', line):
-            return True
-        # Check if return type + function name is std::
-        if re.match(r'^std::', line):
-            return True
-        if re.match(r'^__gnu_cxx::', line):
-            return True
+        # Empty line
+        if not line:
+            continue
+        # Check if this line has std:: before the opening paren (function name)
+        paren_pos = line.find('(')
+        if paren_pos > 0:
+            before_paren = line[:paren_pos]
+            if 'std::' in before_paren or '__gnu_cxx::' in before_paren:
+                return True
     
     return False
 
