@@ -179,6 +179,8 @@ def is_user_function(func, func_name: str) -> bool:
         # MSVC STL internals
         "_Narrow_char_traits", "_Char_traits_base", "_String_alloc",
         "_Compressed_pair", "_Vector_alloc", "_List_alloc",
+        # GNU C++ extensions
+        "__gnu_cxx::", "__gnu_cxx", "char_traits",
     ]
     for pattern in stl_patterns:
         if pattern in func_name:

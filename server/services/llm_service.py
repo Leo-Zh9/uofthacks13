@@ -288,10 +288,11 @@ def _detect_and_truncate_repetition(code: str) -> str:
     if len(lines) < 10:
         return code
     
+    truncate_at = None
+    
     # Strategy 1: Look for repeated line patterns (same line > 3 times in a row)
     consecutive_repeats = 0
     last_line = None
-    truncate_at = None
     
     for i, line in enumerate(lines):
         stripped = line.strip()
@@ -301,28 +302,73 @@ def _detect_and_truncate_repetition(code: str) -> str:
         if stripped == last_line:
             consecutive_repeats += 1
             if consecutive_repeats >= 3:
-                # Found repetition loop, find where it started
                 truncate_at = i - consecutive_repeats
                 break
         else:
             consecutive_repeats = 0
             last_line = stripped
     
-    # Strategy 2: Look for total frequency (same meaningful line appears many times)
+    # Strategy 2: Detect variable name inflation pattern
+    # e.g., str_body, str_bod, str_bo, str_b OR str_bodyt, str_bodytt, str_bodyttt
+    if truncate_at is None:
+        import re
+        var_decl_pattern = re.compile(r'std::string\s+(\w+)\s*\(')
+        var_names = []
+        var_lines = []
+        
+        for i, line in enumerate(lines):
+            match = var_decl_pattern.search(line)
+            if match:
+                var_names.append(match.group(1))
+                var_lines.append(i)
+        
+        # Look for inflation: names getting longer by single chars
+        if len(var_names) > 5:
+            inflation_count = 0
+            for j in range(1, len(var_names)):
+                prev = var_names[j-1]
+                curr = var_names[j]
+                # Check if curr is prev + one char, or prev is curr + one char
+                if (len(curr) == len(prev) + 1 and curr.startswith(prev)) or \
+                   (len(prev) == len(curr) + 1 and prev.startswith(curr)):
+                    inflation_count += 1
+                    if inflation_count >= 5:  # 5+ inflating names in a row
+                        # Find where this pattern started
+                        start_idx = j - inflation_count
+                        if start_idx >= 0:
+                            truncate_at = var_lines[start_idx]
+                            print(f"[!] Detected variable inflation loop at line {truncate_at}")
+                            break
+                else:
+                    inflation_count = 0
+    
+    # Strategy 3: Too many std::string declarations (sign of hallucination)
+    if truncate_at is None:
+        string_decl_count = sum(1 for line in lines if 'std::string' in line)
+        if string_decl_count > 15:  # More than 15 string declarations is suspicious
+            # Find where the declarations become excessive
+            count = 0
+            for i, line in enumerate(lines):
+                if 'std::string' in line:
+                    count += 1
+                    if count > 10:  # After 10, start truncating
+                        truncate_at = i
+                        print(f"[!] Detected excessive string declarations ({string_decl_count} total)")
+                        break
+    
+    # Strategy 4: Look for total frequency (same meaningful line appears many times)
     if truncate_at is None:
         seen_lines = {}
         for i, line in enumerate(lines):
             stripped = line.strip()
-            # Skip common structural elements
             if not stripped or stripped in ('{', '}', ';', 'return;', 'break;'):
                 continue
-            if len(stripped) < 15:  # Skip short lines
+            if len(stripped) < 15:
                 continue
             
             if stripped in seen_lines:
                 seen_lines[stripped].append(i)
-                if len(seen_lines[stripped]) >= 4:  # 4+ occurrences
-                    # Truncate at first occurrence
+                if len(seen_lines[stripped]) >= 4:
                     truncate_at = seen_lines[stripped][1]
                     break
             else:
