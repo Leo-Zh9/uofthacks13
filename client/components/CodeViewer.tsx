@@ -119,25 +119,20 @@ export default function CodeViewer({
     onCopy: () => void;
     onDownload: () => void;
   }) => (
-    <div className="flex flex-col h-full bg-[var(--background-secondary)] rounded-lg overflow-hidden border border-gray-700/50">
+    <div className="flex flex-col h-full bg-[var(--background-secondary)] rounded-lg overflow-hidden border border-[var(--border)] shadow-lg">
       {/* Panel header */}
       <div 
-        className="flex items-center justify-between px-4 py-3 border-b border-gray-700/50"
-        style={{ borderTopColor: accentColor, borderTopWidth: '2px' }}
+        className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)] bg-[var(--background-tertiary)]"
       >
         <div className="flex items-center gap-2">
-          <div 
-            className="w-2 h-2 rounded-full" 
-            style={{ backgroundColor: accentColor }}
-          />
-          <span className="text-sm font-semibold tracking-wide" style={{ color: accentColor }}>
+          <span className="text-sm font-medium text-[var(--foreground)]">
             {title}
           </span>
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={onCopy}
-            className="p-1.5 rounded hover:bg-gray-700/50 transition-colors text-gray-400 hover:text-white"
+            className="p-1.5 rounded hover:bg-[var(--background-secondary)] transition-colors text-[var(--foreground-muted)] hover:text-[var(--foreground)]"
             title="Copy to clipboard"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -146,7 +141,7 @@ export default function CodeViewer({
           </button>
           <button
             onClick={onDownload}
-            className="p-1.5 rounded hover:bg-gray-700/50 transition-colors text-gray-400 hover:text-white"
+            className="p-1.5 rounded hover:bg-[var(--background-secondary)] transition-colors text-[var(--foreground-muted)] hover:text-[var(--foreground)]"
             title="Download as .c file"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -175,19 +170,19 @@ export default function CodeViewer({
       <div className="flex items-center justify-between mb-4 flex-wrap gap-4">
         <div className="flex items-center gap-4">
           <h2 className="text-lg font-semibold text-[var(--foreground)]">
-            CODE COMPARISON
+            Code Comparison
           </h2>
           
           {/* Function selector */}
           {displayFunctions.length > 0 && (
             <div className="flex items-center gap-2">
-              <span className="text-xs text-[var(--foreground-muted)]">FUNCTION:</span>
+              <span className="text-xs text-[var(--foreground-muted)] font-mono">Function:</span>
               <select
                 value={selectedFunction}
                 onChange={(e) => setSelectedFunction(e.target.value)}
-                className="bg-[var(--background-tertiary)] border border-gray-700/50 rounded-lg 
-                         px-3 py-1.5 text-sm text-[var(--foreground)] outline-none
-                         focus:border-[var(--cyan)] transition-colors cursor-pointer
+                className="bg-[var(--background-secondary)] border border-[var(--border)] rounded-lg 
+                         px-3 py-1.5 text-sm text-[var(--foreground)] outline-none font-mono
+                         focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)] transition-colors cursor-pointer
                          max-w-[200px]"
               >
                 <option value="__all__">All Functions ({displayFunctions.length})</option>
@@ -210,10 +205,10 @@ export default function CodeViewer({
                 setShowOnlyAI(e.target.checked);
                 setSelectedFunction('__all__');
               }}
-              className="w-4 h-4 rounded border-gray-600 bg-[var(--background-tertiary)] 
-                       text-[var(--cyan)] focus:ring-[var(--cyan)] focus:ring-offset-0"
+              className="w-4 h-4 rounded border-[var(--border)] bg-[var(--background-secondary)] 
+                       text-[var(--primary)] focus:ring-[var(--primary)] focus:ring-offset-0"
             />
-            <span className="text-xs text-[var(--foreground-muted)]">AI ONLY</span>
+            <span className="text-xs text-[var(--foreground-muted)] font-mono">AI Only</span>
           </label>
         </div>
         
@@ -225,14 +220,14 @@ export default function CodeViewer({
                 key={mode}
                 onClick={() => setViewMode(mode)}
                 className={`
-                  px-3 py-1.5 text-xs font-medium rounded transition-all
+                  px-3 py-1.5 text-xs font-medium rounded transition-all font-mono
                   ${viewMode === mode 
-                    ? 'bg-[var(--cyan)] text-[var(--background)] shadow-lg' 
+                    ? 'bg-[var(--background-secondary)] text-[var(--foreground)] shadow-sm' 
                     : 'text-[var(--foreground-muted)] hover:text-[var(--foreground)]'
                   }
                 `}
               >
-                {mode === 'split' ? 'SPLIT' : mode === 'raw' ? 'RAW' : 'CLEAN'}
+                {mode === 'split' ? 'Split' : mode === 'raw' ? 'Raw' : 'Clean'}
               </button>
             ))}
             {/* Gemini view mode - only show if we have gemini code */}
@@ -294,9 +289,9 @@ export default function CodeViewer({
           <button
             onClick={() => setSelectedFunction('__all__')}
             className={`
-              px-3 py-1.5 text-xs font-medium rounded-lg whitespace-nowrap transition-all
+              px-3 py-1.5 text-xs font-medium rounded-lg whitespace-nowrap transition-all font-mono
               ${selectedFunction === '__all__'
-                ? 'bg-[var(--magenta)] text-white'
+                ? 'bg-[var(--primary)] text-white'
                 : 'bg-[var(--background-tertiary)] text-[var(--foreground-muted)] hover:text-[var(--foreground)]'
               }
             `}
@@ -308,16 +303,16 @@ export default function CodeViewer({
               key={func.name}
               onClick={() => setSelectedFunction(func.name)}
               className={`
-                px-3 py-1.5 text-xs font-medium rounded-lg whitespace-nowrap transition-all flex items-center gap-1.5
+                px-3 py-1.5 text-xs font-medium rounded-lg whitespace-nowrap transition-all flex items-center gap-1.5 font-mono
                 ${selectedFunction === func.name
-                  ? 'bg-[var(--cyan)] text-[var(--background)]'
+                  ? 'bg-[var(--primary)] text-white'
                   : 'bg-[var(--background-tertiary)] text-[var(--foreground-muted)] hover:text-[var(--foreground)]'
                 }
               `}
             >
               {func.name}
               {func.refactored_code && (
-                <span className={`w-1.5 h-1.5 rounded-full ${selectedFunction === func.name ? 'bg-[var(--background)]' : 'bg-[var(--green)]'}`} />
+                <span className={`w-1.5 h-1.5 rounded-full ${selectedFunction === func.name ? 'bg-white' : 'bg-green-400'}`} />
               )}
             </button>
           ))}
@@ -331,7 +326,7 @@ export default function CodeViewer({
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
-            className="fixed top-4 right-4 bg-[var(--green)] text-[var(--background)] px-4 py-2 rounded-lg text-sm font-medium z-50"
+            className="fixed top-4 right-4 bg-green-950/90 border border-green-800/50 text-green-300 px-4 py-2 rounded-lg text-sm font-medium z-50 shadow-lg font-mono backdrop-blur-sm"
           >
             Copied {copySuccess}!
           </motion.div>
