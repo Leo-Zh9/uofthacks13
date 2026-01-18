@@ -8,26 +8,24 @@ interface FileDropzoneProps {
   disabled?: boolean;
 }
 
-const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 
 export default function FileDropzone({ onFileSelect, disabled }: FileDropzoneProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const validateFile = (file: File): string | null => {
-    // Check file size
     if (file.size > MAX_FILE_SIZE) {
       return `File too large. Maximum size is ${MAX_FILE_SIZE / (1024 * 1024)}MB`;
     }
 
-    // Check file extension
     const validExtensions = ['.exe', '.elf', '.bin', '.dll', '.so'];
     const hasValidExtension = validExtensions.some(ext => 
       file.name.toLowerCase().endsWith(ext)
     );
 
     if (!hasValidExtension) {
-      return 'Invalid file type. Please upload a PE (.exe, .dll) or ELF binary.';
+      return 'Invalid file type. Supported: .exe, .dll, .elf, .bin, .so';
     }
 
     return null;
@@ -95,36 +93,30 @@ export default function FileDropzone({ onFileSelect, disabled }: FileDropzonePro
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         className={`
-          relative p-12 rounded-xl cursor-pointer
-          border-2 border-dashed transition-all duration-300
+          relative p-12 rounded-lg cursor-pointer
+          border-2 border-dashed transition-all duration-200
           ${disabled 
-            ? 'border-gray-600 bg-gray-800/30 cursor-not-allowed opacity-50' 
+            ? 'border-[var(--border)] bg-[var(--background-secondary)] cursor-not-allowed opacity-50' 
             : isDragging 
-              ? 'border-[var(--cyan)] bg-[var(--cyan)]/10 glow-cyan' 
-              : 'border-[var(--cyan)]/50 bg-[var(--background-secondary)] hover:border-[var(--cyan)] hover:bg-[var(--cyan)]/5'
+              ? 'border-[var(--primary)] bg-[var(--background-secondary)] shadow-lg shadow-[var(--primary)]/10' 
+              : 'border-[var(--border)] bg-[var(--background-secondary)] hover:border-[var(--border-hover)] hover:bg-[var(--background-tertiary)]'
           }
         `}
         animate={{
-          scale: isDragging ? 1.02 : 1,
+          scale: isDragging ? 1.01 : 1,
         }}
         transition={{ duration: 0.2 }}
       >
-        {/* Animated corner accents */}
-        <div className="absolute top-0 left-0 w-8 h-8 border-t-2 border-l-2 border-[var(--cyan)] rounded-tl-xl" />
-        <div className="absolute top-0 right-0 w-8 h-8 border-t-2 border-r-2 border-[var(--magenta)] rounded-tr-xl" />
-        <div className="absolute bottom-0 left-0 w-8 h-8 border-b-2 border-l-2 border-[var(--magenta)] rounded-bl-xl" />
-        <div className="absolute bottom-0 right-0 w-8 h-8 border-b-2 border-r-2 border-[var(--cyan)] rounded-br-xl" />
-
-        <div className="flex flex-col items-center gap-6">
+        <div className="flex flex-col items-center gap-4">
           {/* Upload icon */}
           <motion.div
             animate={{
-              y: isDragging ? -10 : 0,
+              y: isDragging ? -4 : 0,
             }}
-            transition={{ duration: 0.3 }}
+            transition={{ duration: 0.2 }}
           >
             <svg
-              className={`w-16 h-16 ${isDragging ? 'text-[var(--cyan)]' : 'text-[var(--foreground-muted)]'}`}
+              className={`w-12 h-12 ${isDragging ? 'text-[var(--primary)]' : 'text-[var(--foreground-muted)]'}`}
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -139,48 +131,17 @@ export default function FileDropzone({ onFileSelect, disabled }: FileDropzonePro
           </motion.div>
 
           {/* Text content */}
-          <div className="text-center">
-            <h3 className={`text-xl font-semibold mb-2 ${isDragging ? 'text-[var(--cyan)] text-glow-cyan' : 'text-[var(--foreground)]'}`}>
-              {isDragging ? 'DROP BINARY HERE' : 'UPLOAD EXECUTABLE'}
+          <div className="text-center space-y-2">
+            <h3 className={`text-lg font-medium ${isDragging ? 'text-[var(--primary)]' : 'text-[var(--foreground)]'}`}>
+              {isDragging ? 'Drop file here' : 'Upload executable'}
             </h3>
-            <p className="text-[var(--foreground-muted)] text-sm">
-              Drag and drop your <span className="text-[var(--cyan)]">.exe</span> or{' '}
-              <span className="text-[var(--magenta)]">.elf</span> file here, or click to browse
+            <p className="text-sm text-[var(--foreground-muted)]">
+              Drag and drop your binary file, or click to browse
             </p>
-            <p className="text-[var(--foreground-muted)] text-xs mt-2">
-              Maximum file size: 5MB
+            <p className="text-xs text-[var(--foreground-subtle)] mt-1 font-mono">
+              Supported: .exe, .dll, .elf, .bin, .so • Max 50MB
             </p>
           </div>
-
-          {/* Animated particles when dragging */}
-          <AnimatePresence>
-            {isDragging && (
-              <>
-                {[...Array(6)].map((_, i) => (
-                  <motion.div
-                    key={i}
-                    className="absolute w-2 h-2 bg-[var(--cyan)] rounded-full"
-                    initial={{ 
-                      opacity: 0, 
-                      x: 0, 
-                      y: 0,
-                    }}
-                    animate={{ 
-                      opacity: [0, 1, 0],
-                      x: Math.cos(i * 60 * Math.PI / 180) * 100,
-                      y: Math.sin(i * 60 * Math.PI / 180) * 100,
-                    }}
-                    exit={{ opacity: 0 }}
-                    transition={{ 
-                      duration: 1,
-                      repeat: Infinity,
-                      delay: i * 0.1,
-                    }}
-                  />
-                ))}
-              </>
-            )}
-          </AnimatePresence>
         </div>
       </motion.div>
 
@@ -191,7 +152,7 @@ export default function FileDropzone({ onFileSelect, disabled }: FileDropzonePro
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
-            className="mt-4 p-4 bg-red-500/10 border border-red-500/50 rounded-lg text-red-400 text-sm text-center"
+            className="mt-4 p-4 bg-red-950/30 border border-red-800/50 rounded-lg text-red-300 text-sm text-center"
           >
             {error}
           </motion.div>
