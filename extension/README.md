@@ -1,6 +1,6 @@
-# EXE Analyzer Chrome Extension
+# Alias Chrome Extension
 
-A Chrome extension that automatically intercepts downloaded executable files (.exe, .dll, .elf, .bin, .so) and sends them to a backend server for LLM-powered decompilation and analysis.
+A Chrome extension that automatically intercepts downloaded executable files (.exe, .dll, .elf, .bin, .so) and sends them to the Alias backend for AI-powered decompilation and analysis.
 
 ## Features
 
@@ -32,7 +32,7 @@ chrome-extension/
 3. Enable **Developer mode** (toggle in top right)
 4. Click **Load unpacked**
 5. Select the `chrome-extension` folder
-6. **Important**: Click on the extension details and enable **"Allow access to file URLs"**
+6. **Important**: Click on the extension details (find "Alias") and enable **"Allow access to file URLs"**
 
 ## Usage
 

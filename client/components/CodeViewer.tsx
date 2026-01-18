@@ -68,19 +68,23 @@ export default function CodeViewer({
     downloadAsFile(code, `${filename}${funcSuffix}_${suffix}.c`);
   };
 
-  // Handle Gemini cleanup
+  // Handle Gemini cleanup - ALWAYS processes ALL functions together
   const handleGeminiCleanup = async () => {
-    const codeToClean = refactoredCode || rawCode;
+    // Always use the combined refactored code (all functions)
+    // This gives Gemini full context to make better naming decisions
+    const codeToClean = refactoredCombined || rawCombined;
     if (!codeToClean) return;
     
     setGeminiLoading(true);
     setGeminiError(null);
     
     try {
-      const funcName = selectedFunction === '__all__' ? undefined : selectedFunction;
-      const response = await cleanupCodeWithGemini(codeToClean, funcName);
+      // Pass "all_functions" as context, process everything together
+      const response = await cleanupCodeWithGemini(codeToClean, 'all_functions');
       setGeminiCode(response.cleaned_code);
       setViewMode('gemini');
+      // Auto-select "all" view to show the full cleaned code
+      setSelectedFunction('__all__');
     } catch (err) {
       setGeminiError(err instanceof Error ? err.message : 'Cleanup failed');
     } finally {
@@ -189,7 +193,7 @@ export default function CodeViewer({
                 {displayFunctions.map((func) => (
                   <option key={func.name} value={func.name}>
                     {func.name}
-                    {func.refactored_code ? ' ✓' : ' ○'}
+                    {func.refactored_code ? ' [AI]' : ''}
                   </option>
                 ))}
               </select>
@@ -235,14 +239,14 @@ export default function CodeViewer({
               <button
                 onClick={() => setViewMode('gemini')}
                 className={`
-                  px-3 py-1.5 text-xs font-medium rounded transition-all
+                  px-3 py-1.5 text-xs font-medium rounded transition-all font-mono
                   ${viewMode === 'gemini' 
-                    ? 'bg-[var(--magenta)] text-white shadow-lg' 
+                    ? 'bg-[var(--primary)] text-white shadow-lg' 
                     : 'text-[var(--foreground-muted)] hover:text-[var(--foreground)]'
                   }
                 `}
               >
-                ✨ GEMINI
+                Gemini
               </button>
             )}
           </div>
@@ -252,13 +256,9 @@ export default function CodeViewer({
             onClick={handleGeminiCleanup}
             disabled={geminiLoading}
             className={`
-              btn-cyber text-xs py-2 px-4 flex items-center gap-2
+              btn-primary text-xs py-2 px-4 flex items-center gap-2
               ${geminiLoading ? 'opacity-50 cursor-not-allowed' : ''}
             `}
-            style={{ 
-              background: 'linear-gradient(135deg, var(--magenta), var(--cyan))',
-              border: 'none'
-            }}
           >
             {geminiLoading ? (
               <>
@@ -266,19 +266,24 @@ export default function CodeViewer({
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                 </svg>
-                CLEANING...
+                Cleaning...
               </>
             ) : (
-              <>✨ GEMINI CLEANUP</>
+              <>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                </svg>
+                Clean All + Add Comments
+              </>
             )}
           </button>
 
           {/* Download all button */}
           <button
-            onClick={() => handleDownload(geminiCode || refactoredCode, geminiCode ? 'gemini' : 'refactored')}
-            className="btn-cyber text-xs py-2 px-4"
+            onClick={() => handleDownload(geminiCode || refactoredCombined, geminiCode ? 'gemini' : 'refactored')}
+            className="btn-outline text-xs py-2 px-4"
           >
-            EXPORT CLEAN CODE
+            Export Code
           </button>
         </div>
       </div>
@@ -340,9 +345,12 @@ export default function CodeViewer({
           <motion.div
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
-            className="mb-4 p-3 bg-red-500/10 border border-red-500/50 rounded-lg text-red-400 text-sm"
+            className="mb-4 p-3 bg-red-500/10 border border-red-500/50 rounded-lg text-red-400 text-sm flex items-center gap-2"
           >
-            ⚠️ Gemini cleanup failed: {geminiError}
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            Gemini cleanup failed: {geminiError}
           </motion.div>
         )}
 
@@ -373,9 +381,9 @@ export default function CodeViewer({
           />
         ) : viewMode === 'gemini' ? (
           <CodePanel
-            code={geminiCode || '// Click "GEMINI CLEANUP" to generate cleaned code'}
-            title="✨ GEMINI CLEANED"
-            accentColor="var(--magenta)"
+            code={geminiCode || '// Click "Gemini Flash Cleanup" to generate cleaned code with renamed variables and comments'}
+            title="GEMINI FLASH CLEANED (All Functions)"
+            accentColor="var(--primary)"
             onCopy={() => handleCopy(geminiCode, 'gemini code')}
             onDownload={() => handleDownload(geminiCode, 'gemini')}
           />

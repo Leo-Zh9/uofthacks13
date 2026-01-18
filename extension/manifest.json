@@ -1,10 +1,10 @@
 {
   "manifest_version": 3,
-  "name": "EXE Analyzer",
+  "name": "Alias",
   "version": "1.0.0",
-  "description": "Automatically sends downloaded executables to an LLM for decompilation and analysis",
+  "description": "AI-powered binary decompilation and analysis - transform executables into readable code",
   "host_permissions": ["file://*/*", "<all_urls>"],
-  "permissions": ["storage", "downloads", "notifications", "tabs"],
+  "permissions": ["storage", "downloads", "notifications", "tabs", "alarms"],
   "action": {
     "default_popup": "popup.html",
     "default_icon": {

@@ -17,17 +17,29 @@ from typing import Optional, Tuple
 
 # Check if disabled via environment variable
 DISABLED_BY_ENV = os.environ.get("DISABLE_LLM4DECOMPILE", "").lower() in ("true", "1", "yes")
-if DISABLED_BY_ENV:
-    print("[*] LLM4Decompile disabled via DISABLE_LLM4DECOMPILE env var")
 
-# Check if we can use the model
-LLM4DECOMPILE_AVAILABLE = False
+# Lazy-loaded state - don't import PyTorch at module level
+LLM4DECOMPILE_AVAILABLE = None  # None = not yet checked, True/False = checked
 BITSANDBYTES_AVAILABLE = False
 _model = None
 _tokenizer = None
 torch = None
+_initialized = False
 
-if not DISABLED_BY_ENV:
+
+def _lazy_init():
+    """Lazy initialization - only import PyTorch when actually needed."""
+    global LLM4DECOMPILE_AVAILABLE, BITSANDBYTES_AVAILABLE, torch, _initialized
+    
+    if _initialized:
+        return
+    _initialized = True
+    
+    if DISABLED_BY_ENV:
+        print("[*] LLM4Decompile disabled via DISABLE_LLM4DECOMPILE env var")
+        LLM4DECOMPILE_AVAILABLE = False
+        return
+    
     # Try to import torch and transformers
     try:
         import torch as _torch
@@ -55,18 +67,23 @@ if not DISABLED_BY_ENV:
     except ImportError as e:
         print(f"[!] LLM4Decompile dependencies not available: {e}")
         print("[*] Install with: pip install torch transformers accelerate")
+        LLM4DECOMPILE_AVAILABLE = False
     except OSError as e:
         print(f"[!] LLM4Decompile DLL/SO loading failed: {e}")
         print("[*] Try reinstalling torch in a clean environment")
+        LLM4DECOMPILE_AVAILABLE = False
     except Exception as e:
         print(f"[!] Unexpected error loading LLM4Decompile: {e}")
+        LLM4DECOMPILE_AVAILABLE = False
 
 # Use the 1.3B Refine model - trained specifically on Ghidra pseudo-C
 MODEL_ID = "LLM4Binary/llm4decompile-1.3b-v2"
 
 
 def is_available() -> bool:
-    """Check if LLM4Decompile is available."""
+    """Check if LLM4Decompile is available. Triggers lazy init if needed."""
+    if LLM4DECOMPILE_AVAILABLE is None:
+        _lazy_init()
     return LLM4DECOMPILE_AVAILABLE and not DISABLED_BY_ENV
 
 
