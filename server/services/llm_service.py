@@ -175,7 +175,7 @@ def decompile_to_c(ghidra_pseudo_c: str) -> str:
     
     try:
         # Truncate very long inputs to prevent slow inference
-        max_input_chars = 8000  # ~2000 tokens
+        max_input_chars = 32000  # ~8000 tokens 
         truncated_input = ghidra_pseudo_c
         if len(ghidra_pseudo_c) > max_input_chars:
             truncated_input = ghidra_pseudo_c[:max_input_chars] + "\n// ... (input truncated)"

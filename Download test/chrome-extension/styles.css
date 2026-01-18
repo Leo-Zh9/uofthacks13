@@ -148,6 +148,76 @@ p {
   color: #721c24;
 }
 
+/* Toggle Switch */
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.toggle-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #333;
+}
+
+.toggle-description {
+  font-size: 11px;
+  color: #888;
+  margin-bottom: 0;
+}
+
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #ccc;
+  transition: 0.3s;
+  border-radius: 24px;
+}
+
+.toggle-slider:before {
+  position: absolute;
+  content: "";
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: 0.3s;
+  border-radius: 50%;
+}
+
+input:checked + .toggle-slider {
+  background: linear-gradient(90deg, #4285f4, #9b59b6);
+}
+
+input:checked + .toggle-slider:before {
+  transform: translateX(20px);
+}
+
+.download-meta {
+  font-size: 11px;
+  color: #888;
+}
+
 .view-results-btn {
   margin-top: 6px;
   padding: 6px 12px;
@@ -168,9 +238,52 @@ p {
   color: #28a745;
 }
 
+.status-warning {
+  color: #ffc107;
+}
+
 .status-error,
 .status-offline {
   color: #dc3545;
+}
+
+/* Help section */
+.help-section {
+  background: #fff3cd;
+  border: 1px solid #ffc107;
+  padding: 12px;
+  border-radius: 8px;
+  margin-top: 12px;
+}
+
+.help-section h2 {
+  color: #856404;
+  border-bottom: none;
+  margin-bottom: 8px;
+}
+
+.help-text {
+  font-size: 12px;
+  color: #856404;
+  margin-bottom: 8px;
+}
+
+.help-steps {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 11px;
+  color: #856404;
+}
+
+.help-steps li {
+  margin-bottom: 4px;
+}
+
+.help-steps code {
+  background: rgba(0,0,0,0.1);
+  padding: 2px 4px;
+  border-radius: 3px;
+  font-size: 10px;
 }
 
 .primary-btn {
@@ -203,6 +316,12 @@ p {
   border-radius: 4px;
   cursor: pointer;
   font-size: 13px;
+}
+
+.danger-btn.small-btn {
+  padding: 4px 10px;
+  font-size: 11px;
+  margin-top: 8px;
 }
 
 .danger-btn:hover {

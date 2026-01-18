@@ -67,6 +67,33 @@ LIBRARY_FUNCTIONS: Set[str] = {
     "_Unwind_Resume", "_Unwind_RaiseException", "_Unwind_GetIP",
     "__gxx_personality_v0", "__cxa_begin_catch", "__cxa_end_catch",
     "__cxa_throw", "__cxa_rethrow", "__cxa_allocate_exception",
+    # Common short helper/comparison functions (STL/operator overloads)
+    "empty", "size", "length", "capacity", "begin", "end", "cbegin", "cend",
+    "rbegin", "rend", "front", "back", "data", "clear", "erase", "insert",
+    "push_back", "pop_back", "push_front", "pop_front", "resize", "reserve",
+    "swap", "assign", "at", "get", "set", "find", "count", "contains",
+    # Comparison operators (demangled names)
+    "eq", "ne", "lt", "gt", "le", "ge",
+    "equal", "not_equal", "less", "greater", "less_equal", "greater_equal",
+    # Iterator functions
+    "next", "prev", "advance", "distance",
+    # Smart pointer operations
+    "reset", "release", "get_deleter", "use_count", "unique", "expired", "lock",
+    # Type traits / metaprogramming stubs
+    "type", "value_type", "pointer", "reference", "iterator", "const_iterator",
+    # Memory allocation/deallocation (STL allocators)
+    "allocate", "deallocate", "construct", "destroy", "get_allocator",
+    "allocator", "rebind", "max_size",
+    # String operations (std::string methods)
+    "c_str", "substr", "append", "replace", "compare", "rfind", "find_first_of",
+    "find_last_of", "find_first_not_of", "find_last_not_of", "npos",
+    # Move/copy semantics
+    "copy", "move", "forward", "move_if_noexcept",
+    "copy_n", "copy_backward", "move_backward",
+    # Other STL internals
+    "emplace", "emplace_back", "emplace_front", "emplace_hint",
+    "shrink_to_fit", "bucket_count", "load_factor", "max_load_factor",
+    "hash_function", "key_eq", "key_comp", "value_comp",
 }
 
 # Only try to use PyGhidra if GHIDRA_INSTALL_DIR is set
@@ -188,6 +215,11 @@ def is_user_function(func, func_name: str) -> bool:
     
     # Skip C++ destructors and constructors (usually not interesting)
     if func_name.startswith("~") or func_name.endswith("::~"):
+        return False
+    
+    # Skip very short function names (1-2 chars) that are likely operators or helpers
+    # But keep "main" etc.
+    if len(func_name) <= 2 and func_name.lower() not in ["main"]:
         return False
     
     # Skip functions starting with single underscore (usually compiler-generated)

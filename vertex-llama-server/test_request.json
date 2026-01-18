@@ -1,0 +1,11 @@
+{
+  "instances": [
+    {
+      "ghidra_code": "undefined8 main(void)\n{\n  undefined8 uVar1;\n  char *__s;\n  \n  __s = (char *)malloc(0x100);\n  if (__s == (char *)0x0) {\n    uVar1 = 1;\n  }\n  else {\n    strcpy(__s,\"Hello, World!\");\n    puts(__s);\n    free(__s);\n    uVar1 = 0;\n  }\n  return uVar1;\n}",
+      "max_tokens": 1024
+    }
+  ],
+  "parameters": {
+    "temperature": 0.0
+  }
+}

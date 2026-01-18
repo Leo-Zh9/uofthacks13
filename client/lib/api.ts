@@ -29,11 +29,21 @@ export interface JobResultResponse {
   error: string | null;
 }
 
-export async function uploadBinary(file: File): Promise<UploadResponse> {
+export interface UploadOptions {
+  geminiMode?: boolean;
+}
+
+export async function uploadBinary(file: File, options?: UploadOptions): Promise<UploadResponse> {
   const formData = new FormData();
   formData.append('file', file);
 
-  const response = await fetch(`${API_BASE_URL}/api/upload`, {
+  // Build URL with query params
+  const url = new URL(`${API_BASE_URL}/api/upload`);
+  if (options?.geminiMode) {
+    url.searchParams.append('gemini_mode', 'true');
+  }
+
+  const response = await fetch(url.toString(), {
     method: 'POST',
     body: formData,
   });

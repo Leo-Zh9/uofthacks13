@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import FileDropzone from '@/components/FileDropzone';
 import ProgressStepper, { Stage } from '@/components/ProgressStepper';
@@ -10,7 +11,8 @@ import { uploadBinary, getJobStatus, getJobResult, JobResultResponse } from '@/l
 
 type AppState = 'idle' | 'processing' | 'complete' | 'error';
 
-export default function Home() {
+function HomeContent() {
+  const searchParams = useSearchParams();
   const [appState, setAppState] = useState<AppState>('idle');
   const [jobId, setJobId] = useState<string | null>(null);
   const [stage, setStage] = useState<Stage>('pending');
@@ -19,6 +21,35 @@ export default function Home() {
   const [result, setResult] = useState<JobResultResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [filename, setFilename] = useState<string>('decompiled');
+  const [geminiMode, setGeminiMode] = useState(false);
+  const [initialized, setInitialized] = useState(false);
+
+  // Load job from URL query parameter (from Chrome extension)
+  useEffect(() => {
+    if (initialized) return; // Only run once
+    
+    const jobIdParam = searchParams.get('jobId');
+    const filenameParam = searchParams.get('filename');
+    
+    console.log('URL params:', { jobIdParam, filenameParam });
+    
+    // Handle job ID from Chrome extension
+    if (jobIdParam) {
+      console.log('Loading job from URL:', jobIdParam);
+      setJobId(jobIdParam);
+      setFilename(filenameParam || 'extension-download');
+      setAppState('processing');
+      setStage('pending');
+      setProgress(10);
+      setLogs([
+        `[*] Loading job from Chrome extension...`,
+        `[*] File: ${filenameParam || 'unknown'}`,
+        `[*] Job ID: ${jobIdParam}`,
+        `[*] Starting to poll for updates...`
+      ]);
+      setInitialized(true);
+    }
+  }, [searchParams, initialized]);
 
   // Poll for job status
   useEffect(() => {
@@ -29,7 +60,15 @@ export default function Home() {
         const status = await getJobStatus(jobId);
         setStage(status.status as Stage);
         setProgress(status.progress);
-        setLogs(status.logs);
+        
+        // Merge new logs with existing ones, avoiding duplicates
+        setLogs(prevLogs => {
+          const newLogs = status.logs.filter(log => !prevLogs.includes(log));
+          if (newLogs.length > 0) {
+            return [...prevLogs, ...newLogs];
+          }
+          return status.logs; // Replace with server logs once they start coming
+        });
 
         if (status.status === 'completed') {
           const jobResult = await getJobResult(jobId);
@@ -41,11 +80,19 @@ export default function Home() {
         }
       } catch (err) {
         console.error('Polling error:', err);
+        // If job not found, it might have expired
+        if (err instanceof Error && err.message.includes('not found')) {
+          setError('Job not found. It may have expired.');
+          setAppState('error');
+        }
       }
     };
 
+    // Poll immediately
     pollStatus();
-    const interval = setInterval(pollStatus, 2000);
+    
+    // Then poll every 1.5 seconds for faster updates
+    const interval = setInterval(pollStatus, 1500);
     return () => clearInterval(interval);
   }, [jobId, appState]);
 
@@ -57,13 +104,14 @@ export default function Home() {
     setLogs([
       `[+] Selected file: ${file.name}`,
       `[+] Size: ${(file.size / 1024).toFixed(2)} KB`,
+      `[+] Mode: ${geminiMode ? 'Gemini' : 'LLM4Decompile + Gemini'}`,
       `[*] Uploading...`
     ]);
     setError(null);
     setResult(null);
 
     try {
-      const response = await uploadBinary(file);
+      const response = await uploadBinary(file, { geminiMode });
       setJobId(response.job_id);
       setLogs(prev => [...prev, `[+] Upload complete. Job ID: ${response.job_id}`, '[*] Starting analysis...']);
     } catch (err) {
@@ -72,7 +120,7 @@ export default function Home() {
       setStage('failed');
       setLogs(prev => [...prev, `[!] Error: ${err instanceof Error ? err.message : 'Upload failed'}`]);
     }
-  }, []);
+  }, [geminiMode]);
 
   const handleReset = () => {
     setAppState('idle');
@@ -82,6 +130,7 @@ export default function Home() {
     setLogs([]);
     setResult(null);
     setError(null);
+    // Keep geminiMode preference across resets
   };
 
   return (
@@ -106,14 +155,33 @@ export default function Home() {
               </div>
             </div>
             
-            {appState !== 'idle' && (
-              <button
-                onClick={handleReset}
-                className="btn-outline text-sm"
-              >
-                New Analysis
-              </button>
-            )}
+            <div className="flex items-center gap-4">
+              {/* Gemini Mode Toggle */}
+              {appState === 'idle' && (
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <span className={`text-sm font-medium transition-colors ${geminiMode ? 'text-[var(--primary)]' : 'text-[var(--foreground-muted)]'}`}>
+                    Gemini Mode
+                  </span>
+                  <div 
+                    className={`relative w-11 h-6 rounded-full transition-colors ${geminiMode ? 'bg-[var(--primary)]' : 'bg-[var(--border)]'}`}
+                    onClick={() => setGeminiMode(!geminiMode)}
+                  >
+                    <div 
+                      className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${geminiMode ? 'translate-x-6' : 'translate-x-1'}`}
+                    />
+                  </div>
+                </label>
+              )}
+              
+              {appState !== 'idle' && (
+                <button
+                  onClick={handleReset}
+                  className="btn-outline text-sm"
+                >
+                  New Analysis
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </header>
@@ -263,5 +331,17 @@ export default function Home() {
         </div>
       </footer>
     </main>
+  );
+}
+
+export default function Home() {
+  return (
+    <Suspense fallback={
+      <main className="min-h-screen bg-gradient-to-br from-[#0d1117] via-[#161b22] to-[#0d1117] flex items-center justify-center">
+        <div className="text-[var(--foreground-muted)]">Loading...</div>
+      </main>
+    }>
+      <HomeContent />
+    </Suspense>
   );
 }
