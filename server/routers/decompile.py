@@ -62,7 +62,7 @@ def update_job_status(job_id: str, status: JobStatus, stage: str, progress: int)
         jobs[job_id]["progress"] = progress
 
 
-async def process_binary(job_id: str, file_path: str, gemini_mode: bool = False, vertex_mode: bool = False):
+async def process_binary(job_id: str, file_path: str, gemini_mode: bool = False):
     """Background task to process the binary file."""
     from services.ghidra_service import decompile_binary
     from services.ai_service import refactor_code
@@ -76,10 +76,8 @@ async def process_binary(job_id: str, file_path: str, gemini_mode: bool = False,
         # Log mode being used
         if gemini_mode:
             add_log(job_id, "[*] Using Gemini Mode (Gemini Pro + Flash)")
-        elif vertex_mode:
-            add_log(job_id, "[*] Using Vertex AI (Cloud GPU) for refactoring")
         else:
-            add_log(job_id, "[*] Using LLM4Decompile + Gemini Flash for refactoring")
+            add_log(job_id, "[*] Using Modal (Cloud LLM4Decompile) + Gemini Flash")
         
         # Decompile the binary
         add_log(job_id, "[*] Initializing decompiler interface...")
@@ -104,20 +102,16 @@ async def process_binary(job_id: str, file_path: str, gemini_mode: bool = False,
         ])
         jobs[job_id]["raw_combined"] = raw_combined
         
-        # Stage 3: AI Refactoring with LLM4Decompile, Vertex AI, or Gemini
+        # Stage 3: AI Refactoring with Modal (LLM4Decompile) or Gemini
         if gemini_mode:
             stage_name = "Gemini refactoring code..."
-        elif vertex_mode:
-            stage_name = "Vertex AI (Cloud GPU) refactoring code..."
         else:
-            stage_name = "AI refactoring code..."
+            stage_name = "Modal (Cloud LLM4Decompile) refactoring..."
         update_job_status(job_id, JobStatus.AI_REFACTORING, stage_name, 60)
         if gemini_mode:
             add_log(job_id, "[*] Starting Gemini Pro refactoring...")
-        elif vertex_mode:
-            add_log(job_id, "[*] Starting Vertex AI inference...")
         else:
-            add_log(job_id, "[*] Starting LLM4Decompile refinement...")
+            add_log(job_id, "[*] Starting Modal inference (LLM4Decompile)...")
         
         # Limit functions to process (CPU inference is slow)
         # Prioritize: entry, main, and first few functions
@@ -147,7 +141,7 @@ async def process_binary(job_id: str, file_path: str, gemini_mode: bool = False,
             progress = 60 + int((i / total_functions) * 35)
             update_job_status(job_id, JobStatus.AI_REFACTORING, f"Refactoring {func_name}...", progress)
             
-            refactored = await refactor_code(func_name, func_code, gemini_mode=gemini_mode, vertex_mode=vertex_mode)
+            refactored = await refactor_code(func_name, func_code, gemini_mode=gemini_mode)
             refactored_functions[func_name] = refactored
             add_log(job_id, f"[+] Completed: {func_name}")
         
@@ -179,14 +173,12 @@ async def upload_binary(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     gemini_mode: bool = False,
-    vertex_mode: bool = False,
 ):
     """Upload a binary file for decompilation.
     
     Args:
         file: The binary file to decompile
-        gemini_mode: If True, use Gemini for refactoring instead of LLM4Decompile
-        vertex_mode: If True, use Vertex AI (Cloud GPU) for faster inference
+        gemini_mode: If True, use Gemini ONLY. If False, uses Modal (Cloud LLM4Decompile) + Gemini cleanup.
     """
     # Read file content
     content = await file.read()
@@ -215,11 +207,9 @@ async def upload_binary(
     
     # Determine mode string for logging
     if gemini_mode:
-        mode_str = "Gemini"
-    elif vertex_mode:
-        mode_str = "Vertex AI (Cloud GPU)"
+        mode_str = "Gemini Pro (Full)"
     else:
-        mode_str = "LLM4Decompile + Gemini"
+        mode_str = "Modal (LLM4Decompile) + Gemini"
     
     # Initialize job
     jobs[job_id] = {
@@ -234,11 +224,10 @@ async def upload_binary(
         "refactored_combined": "",
         "error": None,
         "gemini_mode": gemini_mode,
-        "vertex_mode": vertex_mode,
     }
     
     # Start background processing
-    background_tasks.add_task(process_binary, job_id, file_path, gemini_mode, vertex_mode)
+    background_tasks.add_task(process_binary, job_id, file_path, gemini_mode)
     
     return UploadResponse(
         job_id=job_id,
