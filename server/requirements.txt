@@ -1,9 +1,9 @@
-fastapi==0.109.0
-uvicorn==0.27.0
-python-multipart==0.0.6
+fastapi>=0.115.0
+uvicorn>=0.32.0
+python-multipart>=0.0.9
 pyghidra>=1.0.0
-pydantic==2.5.0
-python-dotenv==1.0.0
+pydantic>=2.10.0
+python-dotenv>=1.0.0
 
 # LLM4Decompile 1.3B dependencies
 # Note: torch is installed separately in Dockerfile for CPU/GPU flexibility
