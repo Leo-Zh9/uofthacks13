@@ -148,10 +148,6 @@ For the best hackathon demo:
 2. Pre-upload a sample binary to show the full flow
 3. Have the split view ready to show the transformation
 
-## License
-
-MIT
-
 ## Authors
 
 Built at UofTHacks 13
